@@ -1,0 +1,43 @@
+This is an emulator for the DCPU16 CPU in Notch's upcoming game 0x10c.
+There are also a few code examples of very basic things, and a very rudimentary OS.
+There is a description of the OS in the os/ directory.
+
+Install:
+
+    Graphical:
+
+    1. Install SFML (http://www.sfml-dev.org/)
+
+    2. On linux all you have to do is run make.
+        a. On Mac you will need to create a new Xcode project but it should work fine without any modification
+        b. On Windows, you'll need to do a bit of modification to emu.cpp to make it launch. Atleast in Visual Studio 2010
+
+    
+    Command Line
+    
+    1. No external libraries needed
+    
+    2. Compile like you normally would.
+
+Usage:
+
+./dcppu <flags> <filename>
+
+    Flags
+        -f  Runs the CPU as fast as possible. With or without makes no difference
+        -t <time>  Runs the CPU for <time> ms.
+        -d  Outputs a memory dump file called mem.dump after the CPU finishes running. You need to run with -t to get a
+            memory dump if you are not running the graphical version.
+            
+            
+Assembling code:
+
+I do not have an assembler, but there are a lot out there. I use deNull's assembler
+and emulator. (http://denull.ru/dcpu/dcpu.htm). Very good debugger as well.
+
+
+To-do:
+
+- Add colored text support. 9-bit color, top 9 bits of each word in the output buffer.
+
+- Limit emulator to 100k Hz so -f does something
