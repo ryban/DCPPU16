@@ -1,0 +1,52 @@
+Outline on how to make a program loadable by this OS
+
+ First few lines should be
+
+ SET A, main           ; main being your entry point
+ ADD A, [_offset]  ; prgm offest is a global variable defined by the OS when the program is started
+ SET PC, A
+
+ The Global Variables are defined EXACTLY like this
+   :_offset dat 0xffff         ; function pointer to malloc
+   :_malloc dat 0xfffe         ; function pointer to malloc
+   :_free   dat 0xfffd         ; function pointer to free
+   :_outptr dat 0xfffc         ; pointer to the output pointer for writing characters.
+   :_bl     dat 0xfffb         ; pointer to teh bottom left of the screen
+   :_prtnum dat 0xfffa         ; prints out a number passed in A
+   :_prtstr dat 0xfff9         ; prints a str passed in A
+   :_rand   dat 0xfff8         ; sets the value _seed to the next random
+   :_seed   dat 0xfff7         ; where the last random number is stored. srand would be SET [_seed], #
+   :_clrscrn dat 0xfff6        ; clears the screen and displays the default message
+   :_atoi   dat 0xfff5         ; takes a string and converts it to a binary number. Will not check if the string is valid, be careful
+   :_static dat 0xfff6         ; pointer to the dynamic memory allocated when the program is executed
+   :_heap   dat 0xfff5         ; pointer to the start of the heap
+   :_heaparr dat 0xfff4        ; pointer to the array of allocated memory
+
+ Values passed to the program
+       - J: pointer to a 64 word block of memory for the program
+               - also saved in global vars
+
+
+ Jumping to a sub routine is much more tedious now though.
+ You need to store the subroutine pointer in a register then add the offest
+ The same goes for normal SET PC, loop like statements
+
+ Example: loop and print out the loop counter
+
+:foo
+            SET PUSH, X
+           
+            SET A, 0x30
+            SET B, [_outptr]
+:loop
+            SET [B], A
+            ADD B, 1
+            ADD A, 1
+            SET X, loop
+            ADD X, [offset]
+
+            IFG 0x40, A
+                SET PC, X
+
+            SET X, POP
+            SET PC, POP

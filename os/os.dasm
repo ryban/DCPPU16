@@ -1,0 +1,595 @@
+; Very Very VERY simplistic OS type system, with basic a malloc call, maybe
+; This code does not abide by the de-facto standards we have in place.
+; Might fix that later
+
+
+; Initialize the screen and start main
+; Fall back to reset everything
+:init
+            JSR clearscrn
+            SET PC, main
+
+
+;================================================================
+
+; Main program loop
+:main
+            JSR malloc                      ; allocate 64 words of memory for the input string
+            SET J, A
+            SET [indat], J
+            SET I, J
+            SET A, 0                        ; keeps track of how many characters have been entered
+
+:read
+            SET B, [inptr]                   ; start of out buffer
+            IFE [B], 0
+                SET PC, read
+
+            SET A, [B]
+            SET [B], 0
+            IFE A, 0xa                      ; newline
+                SET PC, react
+
+            IFE A, 8                        ; backspace
+                SET PC, bkspc
+
+            SET [I], A
+            SET C, [outptr]
+            SET [C], A
+            ADD I, 1
+            SET [I], 0                      ; NULL terminate
+            ADD C, 1
+            SET [outptr], C
+
+            SET [B], 0
+            SET PC, read
+
+:bkspc
+            SET C, [outptr]
+            SUB C, 1
+            IFE [bl], C
+                SET PC, read
+            IFG [bl], C
+                SET PC, read 
+
+            SUB I, 1
+            SET [I], 0                      ; NULL terminate
+
+            SET C, [outptr]
+            SUB C, 1
+            SET [C], 0
+            SET [outptr], C
+
+            SET PC, read
+
+:react
+            JSR pushlines                   ; start a new line
+
+            SET [I], 0                      ; NULL terminate the string
+
+            SET B, clear                    ; check if the input is "clear"
+            SET A, J
+
+            JSR cmpstr                      ; returns 1 if the strings are equal
+            IFE A, 1
+                JSR clearscrn               ; input is "clear", so clear the screen
+            IFE A, 1
+                SET PC, mainend                        
+            SET A, J                        ; check if it is rand
+            SET B, randstr
+
+            JSR cmpstr
+            IFE A, 1
+                JSR cmdrand                 ; execute the random command
+            IFE A, 1
+                SET PC, mainend
+
+            SET A, J
+            JSR splitstr                    ; seperate command by its spaces
+            SET C, A                        ; move the number of strings from A to C
+
+            SET A, J
+            SET B, echocmd
+            JSR cmpstr                      ; check if the first string is echo
+            IFE A, 1
+                SET PC, e1
+            SET PC, mainend
+:e1
+            SET A, J
+            SET B, C
+            JSR echo
+            ;SET PC, mainend
+    
+:mainend
+            JSR resetcarrot
+            SET I, J                        ; reset I to its base of J
+            SET PC, read
+
+
+;==================================================================
+
+; Sets the carrot to the bottom left and puts the outptr after it
+
+:resetcarrot
+            SET A, [bl]
+            SET [A], [carrot]
+            ADD A, 1
+            SET [outptr], A
+
+                                            ; now clear the input string
+
+            SET PC, POP
+
+;==================================================================
+
+; clears the screen and displays the OS message at the top
+; set thes outptr to the correct starting value
+
+:clearscrn
+            SET PUSH, A
+            SET A, startmsg
+            SET B, 0x8000
+:clr1                                       ; loop until message is printed
+            SET [B], [A]
+            ADD A, 1
+            ADD B, 1
+
+            IFE [A], 0
+                SET PC, clr2
+            SET PC, clr1
+:clr2
+            SET [B], 0
+            ADD B, 1
+            IFG 0x8200, B
+                SET PC, clr2
+
+            JSR resetcarrot                     ; set the outptr to the bottom left past the '>'
+
+            SET A, POP
+            SET PC, POP
+
+;==================================================================
+
+; Moves all lines up one line, deleting ones that go off of the top of the terminal
+; A is over written don't keep stuff there
+
+; To override this function, look at the compiled code and fine out what pushlines evaluated to
+; then set that to SET PC, <my_pushlines>.
+; Overriding it is helpful if you want to add the ability to scroll through previous lines
+
+:pushlines
+            SET PUSH, B
+
+            SET A, 0                        ; counter
+                                            ; 0x8020 start of second line
+                                            ; 0x8040 start of third line
+:l3
+            SET [0x801f + A], [0x8040 + A]  ; move the row below, up            
+            ADD A, 1
+            IFE A,  0x1e0
+                SET PC, ldone
+            SET PC, l3
+
+:ldone
+            SET [outptr], [bl]
+
+            SET B, POP
+            SET PC, POP
+
+;==================================================================
+
+; Returns pointers to 64 word chunks
+; maintain a 256 word list of empty 64 word chunks
+; when you need a new one you loop through the 256 word list until you find an empty one
+; Multiply the index of that marker (from the 256 word array) by 64 to get the address
+; the value returned in A is a pointer to the start of the memory
+
+:malloc
+            SET A, 0
+            SET B, [heaparr]
+
+:l4
+            SET C, [B]
+            IFE C, 0
+                SET PC, found
+            IFG A, 0xff                     ; A > 255
+                SET PC, full
+
+            ADD A, 1
+            ADD B, 1
+            SET PC, l4
+
+:found
+            ;ADD B, A
+            SET [B], 0xffff                 ; mark chunk taken
+            MUL A, 0x40                     ; A * 64
+            SET B, [heap]
+            ADD A, B
+
+            SET PC, POP
+:full
+            SET A, 0x2000                   ; A hopefully harmless area...
+            SET PC, POP
+
+;=================================================================
+
+; releases memory given by malloc.
+; This IS NOT automatically done, be sure to free memory when you are done
+; A is the pointer to your memory chunk to be freed
+
+:free
+            SET B, [heap]
+            SUB A, B
+            DIV A, 64
+            SET B, [heaparr]
+            ADD A, B
+            SET [A], 0
+
+            SET PC, POP
+
+;==================================================================
+
+; Compares two NULL terminated strings and returns a 1 in A if they are equal
+; Values passed: A, str1 pointer, B, str2 pointer
+
+:cmpstr
+            SET PUSH, X
+            SET PUSH, Y
+
+            SET X, A
+            SET Y, B
+:cmpl
+            IFN [X], [Y]
+                SET PC, rf                  ; if at anytime two chars are not equal, the strings are not equal
+
+            ADD X, 1
+            ADD Y, 1
+            IFE [X], 0
+                SET PC, chkzero             ; check if y is 0. This they both are return true 
+            IFE [Y], 0                      ; return false, x is non 0 while y is
+                SET PC, rf
+
+            SET PC, cmpl
+:chkzero
+            IFE [X], [Y]
+                SET PC, rt
+
+
+:rt
+            SET A, 1
+            SET Y, POP
+            SET X, POP
+            SET PC, POP
+:rf
+            SET A, 0
+            SET Y, POP
+            SET X, POP
+            SET PC, POP
+
+
+;=================================================================
+
+; Seperates a string into multiple NULL terminated strings at the spaces
+; Pass A as the NUL terminated ptr
+; Returns the number of strings in A. So the command "echo hello" would return 2
+
+:splitstr
+            SET PUSH, B
+            SET PUSH, C
+
+            SET C, 1                    ; number of strings
+
+:spl1
+            IFE [A], 0
+                SET PC, splr
+            IFE [A], 0x20               ; [A] == 'space'
+                SET [A], 0
+            IFE [A], 0
+                ADD C, 1
+
+            ADD A, 1
+            SET PC, spl1
+:splr
+            SET A, C
+            SET C, POP
+            SET B, POP
+            SET PC, POP
+
+
+;=================================================================
+
+; prints the message that comes after "echo"
+; A is the split string pointer, B is the number of strings, but it only prints the first string after echo, for now
+
+:echo
+            IFE B, 1
+                SET PC, POP             ; no strings after 'echo' so just POP
+            ADD A, 5                    ; jump past the word 'echo'
+                                        ; change that to a loop to move past the first string 
+                                        ; then recursivly call echo A, B-1 after printing the string
+            JSR printstr                ; print the string
+            JSR pushlines        
+
+            SET PC, POP
+
+
+;=================================================================
+
+; converts a 5 char ascii string to a binary number
+; returns the number in A.
+; Pointer the NULL terminated string passed in A
+
+;Does not properly work at the moment
+
+:atoi
+            SET PUSH, X
+            SET PUSH, Y
+            SET C, 5
+            SET Y, 0
+:atoi1
+            SET B, 16
+            SET X, [A]
+            SUB X, 0x30                 ; ascii -> decimal
+
+            ADD A, 1
+            SET PUSH, A
+
+            JSR pow
+            MUL A, X
+            ADD Y, A
+            SET A, POP
+            SUB C, 1
+
+            IFG C, 0
+                SET PC, atoi1
+
+            SET Y, POP
+            SET X, POP
+            SET PC, POP
+
+;======================================================================
+
+;returns in A, B^C
+
+:pow
+            IFE B, 0
+                SET PC, rt0
+            IFE C, 0
+                SET PC, rt1
+
+            SET A, B   
+:powl
+            MUL A, B
+            SUB C, 1
+            IFG C, 0
+                SET PC, powl
+            SET PC, POP
+
+
+:rt1
+            SET A, 1
+            SET PC, POP
+
+:rt0
+            SET A, 0
+            SET PC, POP
+
+
+;====================================================================
+
+; converts a single character from upper to lower case
+; assumes you know its a character
+
+:tolower
+            ADD A, 32
+            SET PC, POP 
+
+
+; opposite of to lower
+:toupper
+            SUB A, 32
+            SET PC, POP
+
+;======================================================================
+
+; converts a single character of hex to binary
+; Pass char in B, return in A
+; A > 15 if the character is not hex
+
+:chextobin
+            SET A, B
+            SUB A, 0x30
+            IFG A, 9
+                SET PC, chkrest
+            SET PC, POP                 ; Success
+
+:chkrest    
+            SET A, B
+            SUB A, 0x57
+            
+            SET PC, POP                 ; if A > 15 it failed, if A < 15 it is the correct value
+
+;=====================================================================
+
+; prints out a number
+; A is the number to print
+
+;short A;
+;short B;
+;char str[5];
+;int i = 0; 
+;while(A > 0)
+;{
+;    B = A % 10;
+;    str[i] = itoa(B);
+;    A /= 10;
+;    i++;
+;}
+; the above c code will make a backwards string of the number A
+; assuming A > 0
+:printnum
+            SET PUSH, X
+            SET PUSH, A
+            JSR malloc                  ; memory for the new string
+            SET C, A
+            SET X, C
+
+            SET A, POP
+:pnl
+            SET B, A
+            MOD B, 10                   ; B = A % 10
+            DIV A, 10                   ; A /= 10
+            ADD B, 0x30                 ; itoa(B)
+            SET [X], B                  ; str[i] = itoa(B)
+
+            ADD X, 1                    ; i++
+            IFN A, 0                    ; while(A > 0)
+                SET PC, pnl
+
+            SET [X], 0                  ; NULL terminate
+            SET A, C
+            JSR strprintrev
+                    
+            JSR free                    ; deallocate memory
+
+            SET X, POP
+            SET PC, POP
+
+;=======================================================================
+
+; prints out a NULL terminated string
+; A should be a pointer to a NULL terminated string
+
+:printstr
+            SET PUSH, A
+            SET PUSH, B
+            SET PUSH, C
+
+            SET C, [outptr]                 ; set c to outptr
+:pl  
+            SET B, [A]
+
+            IFE B, 0
+                SET PC, psrt
+
+            SET [C], B
+            ADD C, 1                        ; incriment the outptr
+            ADD A, 1
+            SET PC, pl
+
+:psrt                                       ; printstr return
+            SET [outptr], C
+
+            SET C, POP
+            SET B, POP
+            SET A, POP
+            SET PC, POP
+
+;==========================================================================
+
+; recursive funtion to print a NULL terminated string in reverse
+; A is a pointer to a string
+;
+;void reverse(char *str)
+;{
+;   if(str[0] != 0)
+;   {
+;       reverse(str + 1);
+;       cout << str[0];
+;   }
+;}
+; the above is strprintrev in c++
+:strprintrev
+            SET PUSH, A
+            SET PUSH, B
+            SET PUSH, C
+
+            IFE [A], 0
+                SET PC, rdone               ; base case
+
+            SET B, A
+            ADD A, 1                        
+            JSR strprintrev                 ; recursion!
+            SUB A, 1                        
+            SET C, [outptr]
+            SET [C], [A]
+            ADD C, 1
+            SET [outptr], C
+:rdone
+            SET C, POP
+            SET B, POP
+            SET A, POP
+            SET PC, POP
+
+;==========================================================================
+
+; incriments the random number in seed
+; B, C are the min and max of the output
+; if C == 0, no bound
+; prime1 is 25717
+; prime2 is 51437
+:nextrand
+            SET A, [seed]
+            ADD A, 51437
+            MUL A, [seed]
+            MOD A, 25717
+            ADD A, O
+            SET [seed], A
+            SET PC, POP
+
+;==========================================================================
+
+; Prints out a random number
+
+:cmdrand
+            SET PUSH, A
+
+            JSR nextrand                     ; get a random number
+            SET A, [seed]                    ; rand puts new a random number in seed
+            JSR printnum                     ; print random number
+            JSR pushlines
+            SET A, POP
+            SET PC, POP 
+            
+
+;==========================================================================
+
+
+; Global values for the OS
+
+:outptr     dat 0x81cf                      ; the current pointer for text output, should be the bottom line, after the > "text"
+:bl         dat 0x81ce                      ; pointer to the bottom left of the terminal
+
+:inptr      dat 0x9000
+
+:heaparr    dat 0x9100                      ; that starting pointer for the heap for malloc
+:heap       dat 0x9200                      ; start of the stack of memory addresses
+
+:indat      dat 0                           ; where the pointer to the input string is stored
+
+; Data for use in terminal commands
+
+:carrot     dat ">"                         ; I don't think this is actually called the carrot but whatever
+
+:startmsg   dat "    ====== DCOS v 0.3 ======    ",0
+
+:clear      dat "clear",0                   ; clears the screen and reprints starting message
+
+:echocmd    dat "echo",0                    ; prints the message that comes after echo
+
+:sleep      dat "sleep",0                   ; prints out a screen saver, random characters moving around and what not
+
+:randstr    dat "rand",0                    ; prints out a random number
+
+:seed       dat 0xd78e                      ; seed for the random number generator
+
+:test       dat "1234",0
+
+; Useful in game command possiblities
+
+; - chkpwr  print out current power usage and total power available
+; - chkloc  assumine there is a positioning system, print out ships current pos, and velocity
+; - combat  enters low power mode inorder to put more power towards weapons and shields
+;           low power being dim lights, and if possible, run the cpu at a lower clock rate
+; - inv     assuming there is a storage bay, keep records of all items and print them here
+; - bc      broadcast a message over radio. Works like echo.
