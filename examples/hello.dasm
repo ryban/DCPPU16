@@ -1,0 +1,16 @@
+; Hello World!
+
+        SET A, 0x8000   ; screen buffer
+        SET B, 0
+
+:loop   SET [A], [data + B]
+        ADD A, 1
+        ADD B, 1
+
+        IFE [data + B], 0      ; 11. length of data
+            SET PC, halt
+        SET PC, loop
+
+:halt   SET PC, halt
+
+:data dat "Hello World!",0

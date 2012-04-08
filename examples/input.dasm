@@ -1,0 +1,36 @@
+        SET X, 0x8000           ; output buffer
+
+:main
+        SET J, 0x9000           ; input buffer
+
+:loop   
+        SET A, [J]
+        IFE A, 0                ; if A == 0 goto top to reset input pointer
+            SET PC, main
+
+        JSR print               ; if A != 0 print A
+        SET [J], 0              ; reset char just read
+        ADD J, 1                ; incriment J
+        SET PC, loop
+
+
+; print the character passed in A and incriment out pointer, X
+
+:print  
+        IFG X, 0x81df
+            SET X, 0x8000       ; reset the output buffer to stop overflow
+
+        IFE A, 0x17             ; backspace
+            SET PC, back
+:skip
+        SET [X], A
+        ADD X, 1
+
+        SET PC, POP
+
+:back
+        SUB X, 1
+        SET [X], 0
+        IFE X, 0x7fff           ; underflow the buffer pointer
+            SET X, 0x8000
+        SET PC, POP

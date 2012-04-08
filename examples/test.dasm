@@ -1,0 +1,10 @@
+        SET A, 0
+
+:loop   ADD A, 1
+        JSR sub
+        SET PC, loop
+
+
+:sub
+        ADD B, 1
+        SET PC, POP

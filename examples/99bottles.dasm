@@ -1,0 +1,104 @@
+
+; Main loop
+        SET A, 0x63                 ; A = 99 
+:mainloop
+        ;JSR clrscrn                 ; clear the screen
+        JSR prntnum                 ; print A
+        JSR prntmsg                 ; prints data stored in msg
+        SUB A, 1
+        JSR sleep                   ; sleep for some time
+        SET PC, mainloop
+
+;A pushed to stack
+:clrscrn
+        SET PUSH, A
+
+        SET A, 0x0
+:loop
+        SET [0x8000 + A], 0x20     ; space
+        ADD A, 0x1
+
+        IFE A, 0x200
+            SET PC, rtrn
+        SET PC, loop
+
+:rtrn
+        SET A, POP
+        SET PC, POP
+
+
+
+; prints a number, 5 characters so 42 becomes, 00042
+; A is value being passed, but is preserved
+
+:prntnum
+        SET PUSH, A
+
+        SET B, A
+        DIV B, 0x2710               ; B / 10000
+        MOD A, 0x2710
+        SET PUSH, B
+
+        SET B, A
+        DIV B, 0x3e8                ; B / 1000
+        MOD A, 0x1000
+        SET PUSH, B
+
+        SET B, A
+        DIV B, 0x64                 ; B / 100
+        MOD A, 0x64
+        SET PUSH, B
+
+        SET B, A
+        DIV B, 0xa                  ; B / 10
+        MOD A, 0xa
+        SET PUSH, B
+
+        SET PUSH, A
+
+        SET B, 0x8005
+
+:ploop
+        SET A, POP
+        ADD A, 0x30
+        SET [B], A
+        SUB B, 0x1
+        IFE B, 0x8000               ; max 5 characters being printed
+            SET PC, pr
+        SET PC, ploop
+
+:pr                                 ; return
+        SET A, POP
+        SET PC, POP
+
+
+; prints the message stored in dat
+:prntmsg
+        SET PUSH, A
+        SET PUSH, B
+        SET A, 0x8006
+        SET B, msg
+:mloop
+        SET [A], [B]
+        ADD A, 0x1
+        ADD B, 0x1
+
+        IFE A, 0x8021               ; length of msg + 5
+            SET PC, mr
+        SET PC, mloop
+
+:mr                                 ; return
+        SET B, POP
+        SET A, POP
+        SET PC, POP
+
+
+:sleep
+        SET J, 0
+:sloop        
+        ADD J, 1
+        IFG J, 0x200
+            SET PC, POP
+        SET PC, sloop
+
+:msg dat " bottles of beer on the wall"
