@@ -50,3 +50,17 @@ Outline on how to make a program loadable by this OS
 
             SET X, POP
             SET PC, POP
+
+
+
+
+
+There are large chunks of RAM that are not touched. Might change things around and get them closer but
+most programs dont use a lot of RAM at this time.
+
+0x1000 - 0x7fff is reserved for program code
+
+0x0 - 0x1000 is reserved for the OS (Will chagne as the os grows)
+
+0x9200 - 0xD200 is the heap
+This leaves a lot of room for the stack to expand

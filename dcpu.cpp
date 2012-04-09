@@ -14,23 +14,12 @@ using namespace std;
 
 #include "dcpu.h"
 
-bool ishex(char c)
-{
-    if(isdigit(c))
-        return true;
-    if(tolower(c) >= 'a' && tolower(c) <= 'f')
-        return true;
-
-    return false;
-}
-
 Dcpu::Dcpu(ifstream &code, bool debug, bool fast, int ms)
 {
     DEBUG = debug;
     dont_kill = (ms == 0);
     time_to_kill = ms;
     wait_cycles = fast;
-    dirtyScreen = false;
 
     registers = new unsigned short[NUM_REG];
     RAM = new unsigned short[RAM_SIZE];
@@ -80,16 +69,16 @@ void Dcpu::wait(int cycles, timeval &start)
 // returns a pointer to a value determined by a
 unsigned short * Dcpu::GetValuePtr(int a)
 {
-    if(a <= REGISTER_HIGH)           // register adress
+    if(a <= REGISTER_HIGH)                      // register adress
         return &registers[a];
 
-    if(a <= REGISTER_RAM_HIGH)           // RAM adress of a regitser
+    if(a <= REGISTER_RAM_HIGH)                  // RAM adress of a regitser
     {
         int offs = registers[a - 8];
         return &RAM[offs];
     }
 
-    if(a <= NEXT_WORD_REG_HIGH)           // RAM adress with an offest of register + [++PC]
+    if(a <= NEXT_WORD_REG_HIGH)                 // RAM adress with an offest of register + [++PC]
     {
         int offs = RAM[PC++] + registers[a - 16];
         return &RAM[offs];
@@ -127,7 +116,7 @@ void Dcpu::NonBasic(unsigned short o, unsigned short _a)
             //cout << " jsr\n";
             unsigned short *a = GetValuePtr(_a);
             cycles_to_wait = 2;
-            RAM[--SP] = PC;
+            RAM[--SP] = PC;             // push PC onto the stack
             PC = *a;
             break;
     }
@@ -137,8 +126,6 @@ void Dcpu::SET(unsigned short _a, unsigned short _b)
     //cout << " set\n";
     unsigned short *a = GetValuePtr(_a);
     unsigned short *b = GetValuePtr(_b);
-    if(a >= &RAM[SCREEN_BUFFER] || a < &RAM[SCREEN_BUFFER + (TERMINAL_WIDTH * TERMINAL_HEIGHT)])
-        dirtyScreen = true;
 
     cycles_to_wait = 1;
     *a = *b;
@@ -380,7 +367,6 @@ void Dcpu::UpdateScreen()
         }
         cout << '\n';
     }
-    dirtyScreen = false;
 }
 
 unsigned short *Dcpu::GetScreenBuffer()
@@ -463,9 +449,6 @@ void Dcpu::run()
             case IFG_: IFG(a, b); break;
             case IFB_: IFB(a, b); break;
         }
-        //cout << PC;
-        //if(dirtyScreen)
-            //UpdateScreen();
 
         if(!wait_cycles)
             wait(cycles_to_wait, start);

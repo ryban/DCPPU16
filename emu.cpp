@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
 
     // -d runs in debug mode, prints out memory dump at end
     // -t <value> is the time in ms until the program exits (not very useful anymore)
-    // -f will not perform cycle checks, i.e. ignore the wait(cycles) command (recomended because the timing is WAY off)
+    // -f will not perform cycle checks, i.e. ignore the wait(cycles) command (Does nothing at the moment)
 
     for(int a = 1; a < argc - 1; a++)
     {
@@ -145,8 +145,10 @@ int main(int argc, char *argv[])
 
     cpu_thread.Launch();
 
-    sf::RenderWindow app(sf::VideoMode(TERMINAL_WIDTH * 18 + 32, TERMINAL_HEIGHT * 32 + 20), "DCPPU: DCPU-16 Emulator");
+    sf::RenderWindow app(sf::VideoMode(TERMINAL_WIDTH * 18 + 32, TERMINAL_HEIGHT * 32 + 5), "DCPPU: DCPU-16 Emulator");
     bool running = true;
+
+    app.SetFramerateLimit(30); // Getting 1500fps on somthing this simple seems wasteful
 
     while(running)
     {

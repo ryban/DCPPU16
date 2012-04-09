@@ -18,7 +18,7 @@ using namespace std;
 #define SCREEN_BUFFER 0x8000
 #define TERMINAL_WIDTH 32
 #define TERMINAL_HEIGHT 16
-#define NUM_COLORS 0x1ff
+#define NUM_COLORS 0x1ff                // 9 bit color
 
 #define INPUT_BUFFER 0x9000
 // 0x9000 is the input buffer.
@@ -90,7 +90,6 @@ class Dcpu
         bool dont_kill;
         int time_to_kill;
         bool wait_cycles;
-        bool dirtyScreen;
 
         unsigned short *registers;  // pointer to the registers, 8 total
         unsigned short *RAM;        // pointer to the RAM, 0x10000 words total, 128K 

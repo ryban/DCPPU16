@@ -5,6 +5,7 @@
 
 ; Initialize the screen and start main
 ; Fall back to reset everything
+
 :init
             JSR clearscrn
             SET PC, main
@@ -93,13 +94,23 @@
             JSR cmpstr                      ; check if the first string is echo
             IFE A, 1
                 SET PC, e1
-            SET PC, mainend
+            SET PC, sra
 :e1
             SET A, J
             SET B, C
             JSR echo
-            ;SET PC, mainend
-    
+            SET PC, mainend
+:sra
+            SET A, J
+            SET B, srandstr
+            JSR cmpstr
+            IFE A, 1
+                SET PC, sr1
+            SET PC, mainend
+:sr1
+            SET A, J
+            ADD A, 7                        ; the string that comes after srand
+            JSR srand
 :mainend
             JSR resetcarrot
             SET I, J                        ; reset I to its base of J
@@ -319,30 +330,42 @@
 ; returns the number in A.
 ; Pointer the NULL terminated string passed in A
 
-;Does not properly work at the moment
-
 :atoi
             SET PUSH, X
             SET PUSH, Y
-            SET C, 5
+
+            SET PUSH, A
+            
+            JSR slength
+            SET C, A                    ; C = legntth of the string
+            SET A, POP
             SET Y, 0
+            SUB C, 1
 :atoi1
-            SET B, 16
+            SET B, 10
             SET X, [A]
             SUB X, 0x30                 ; ascii -> decimal
 
             ADD A, 1
+            SET PUSH, C
             SET PUSH, A
-
+            
             JSR pow
+
             MUL A, X
             ADD Y, A
+
             SET A, POP
+            SET C, POP
+
             SUB C, 1
 
-            IFG C, 0
-                SET PC, atoi1
+            IFE C, 0xffff
+                SET PC, atoirt
+            SET PC, atoi1
 
+:atoirt
+            SET A, Y
             SET Y, POP
             SET X, POP
             SET PC, POP
@@ -357,15 +380,14 @@
             IFE C, 0
                 SET PC, rt1
 
-            SET A, B   
-:powl
-            MUL A, B
+            SET PUSH, B
             SUB C, 1
-            IFG C, 0
-                SET PC, powl
+
+            JSR pow
+            MUL A, B
+
+            SET B, POP
             SET PC, POP
-
-
 :rt1
             SET A, 1
             SET PC, POP
@@ -376,7 +398,21 @@
 
 
 ;====================================================================
+; returns the length of a string passed in A
 
+:slength
+            SET B, A
+            SET A, 0
+            IFE [B], 0
+                SET PC, POP             ; length 0, return
+:sllp
+            ADD A, 1
+            ADD B, 1
+            IFN [B], 0
+                SET PC, sllp
+            SET PC, POP     
+
+;====================================================================
 ; converts a single character from upper to lower case
 ; assumes you know its a character
 
@@ -538,6 +574,16 @@
             SET PC, POP
 
 ;==========================================================================
+; seed the RNG with the string passed in A
+
+:srand
+            JSR atoi                        ; get the integer value of A
+
+            SET [seed], A
+
+            SET PC, POP
+
+;==========================================================================
 
 ; Prints out a random number
 
@@ -577,13 +623,15 @@
 
 :echocmd    dat "echo",0                    ; prints the message that comes after echo
 
-:sleep      dat "sleep",0                   ; prints out a screen saver, random characters moving around and what not
+:sleep      dat "sleep",0                   ; prints out a screen saver, random characters moving around and what not.
 
 :randstr    dat "rand",0                    ; prints out a random number
 
+:srandstr   dat "srand",0                   ; sets the seed for the rng to the value that comes after srand
+
 :seed       dat 0xd78e                      ; seed for the random number generator
 
-:test       dat "1234",0
+:sleepchars dat "@#$%1HO476INGE0=\/^2_~+VZ3", 0     ; Characters for the screen saver
 
 ; Useful in game command possiblities
 
