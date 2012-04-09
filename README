@@ -17,15 +17,14 @@ Install:
     
     1. No external libraries needed
     
-    2. Compile like you normally would.
+    2. Compile like you normally would, depending on your OS.
 
 Usage:
 
 ./dcppu <flags> <filename>
 
     Flags
-        -f  Runs the CPU as fast as possible. With or without makes no difference
-        -t <time>  Runs the CPU for <time> ms.
+        -f  Runs the CPU as fast as possible. With or without makes no difference at this time...
         -d  Outputs a memory dump file called mem.dump after the CPU finishes running. You need to run with -t to get a
             memory dump if you are not running the graphical version.
             
@@ -41,3 +40,5 @@ To-do:
 - Add colored text support. 9-bit color, top 9 bits of each word in the output buffer.
 
 - Limit emulator to 100k Hz so -f does something
+
+- Clean up code, in both the emulator, os.dasm

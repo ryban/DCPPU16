@@ -38,13 +38,6 @@ int main(int argc, char *argv[])
         if(!strcmp(argv[a], "-d"))
         {
             debug = true;
-        }else if(!strcmp(argv[a], "-t"))
-        {
-            if(valid_number_string(argv[a+1]))
-                time_to_kill_ms = atoi(argv[a+1]);
-            else
-                cerr << "invalid command <-t " << argv[a+1] << ">. ignoring\n";
-            a++;                    // ignore the command after -t
         }else if(!strcmp(argv[a], "-f"))
         {
             fast = true;
@@ -61,7 +54,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    Dcpu cpu(inFile, debug, fast, time_to_kill_ms);
+    Dcpu cpu(inFile, debug, fast);
 
     cpu.run();
     

@@ -24,11 +24,10 @@ bool ishex(char c)
     return false;
 }
 
-Dcpu::Dcpu(ifstream &code, bool debug, bool fast, int ms)
+Dcpu::Dcpu(ifstream &code, bool debug, bool fast)
 {
     DEBUG = debug;
-    dont_kill = (ms == 0);
-    time_to_kill = ms;
+    dont_kill = true;
     wait_cycles = fast;
     dirtyScreen = false;
 
@@ -139,6 +138,11 @@ void Dcpu::SET(unsigned short _a, unsigned short _b)
     unsigned short *b = GetValuePtr(_b);
     if(a >= &RAM[SCREEN_BUFFER] || a < &RAM[SCREEN_BUFFER + (TERMINAL_WIDTH * TERMINAL_HEIGHT)])
         dirtyScreen = true;
+    if(a == &PC && *b == old_PC)       // exit condition, eg, :halt    SET PC, halt
+    {
+        kill();
+        cout << "killing...\n";
+    }   
 
     cycles_to_wait = 1;
     *a = *b;
@@ -397,15 +401,11 @@ void Dcpu::PushInBuff(char c)
 
 void Dcpu::run()
 {
-    clock_t endTime;
-
-    endTime = clock() + time_to_kill * CLOCKS_PER_SEC / 1000; // after time_to_kill ms, CPU stops
-
     timeval start;
-    while(dont_kill || clock() < endTime)
+    while(dont_kill)
     {
         gettimeofday(&start, NULL);
-
+        old_PC = PC;
         unsigned short ins;
         unsigned short a;
         unsigned short b;
@@ -465,11 +465,11 @@ void Dcpu::run()
         }
         //cout << PC;
         if(dirtyScreen)
-            UpdateScreen();
-
+            //UpdateScreen();
         if(!wait_cycles)
             wait(cycles_to_wait, start);
     }
+    cout << "done\n";
     if(DEBUG)
         MemoryDump();
 }

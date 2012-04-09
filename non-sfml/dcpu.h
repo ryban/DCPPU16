@@ -77,24 +77,24 @@ using namespace std;
 class Dcpu
 {
     public:
-        Dcpu(ifstream &code, bool debug, bool fast,int ms);
+        Dcpu(ifstream &code, bool debug, bool fast);
         ~Dcpu();
 
         void run();
         void MemoryDump();
-	unsigned short *GetScreenBuffer();
-	void kill();
+	    unsigned short *GetScreenBuffer();
+	    void kill();
         void PushInBuff(char c);
     private:
         bool DEBUG;
         bool dont_kill;
-        int time_to_kill;
         bool wait_cycles;
         bool dirtyScreen;
 
         unsigned short *registers;  // pointer to the registers, 8 total
         unsigned short *RAM;        // pointer to the RAM, 0x10000 words total, 128K 
         unsigned short PC;          // program counter, points to RAM address of current instruciton
+        unsigned short old_PC;      // PC from the beginiing of this instruction. Used to detect, :halt SET PC
         unsigned short SP;          // points to the top of the stack
         unsigned short O;           // register for overflow detection
         unsigned short *literals;

@@ -14,16 +14,16 @@ using namespace std;
 
 #include "dcpu.h"
 
-Dcpu::Dcpu(ifstream &code, bool debug, bool fast, int ms)
+Dcpu::Dcpu(ifstream &code, bool debug, bool fast)
 {
     DEBUG = debug;
-    dont_kill = (ms == 0);
-    time_to_kill = ms;
+    dont_kill = true;
     wait_cycles = fast;
 
     registers = new unsigned short[NUM_REG];
     RAM = new unsigned short[RAM_SIZE];
     PC = 0;
+    old_PC = 0;
     SP = 0xffff; // stack pointer starts at 0xffff and counts downwards
     O = 0;
 
@@ -126,6 +126,11 @@ void Dcpu::SET(unsigned short _a, unsigned short _b)
     //cout << " set\n";
     unsigned short *a = GetValuePtr(_a);
     unsigned short *b = GetValuePtr(_b);
+    if(a == &PC && *b == old_PC)       // exit condition, eg, :halt    SET PC, halt
+     {
+        cout << "killing...\n";
+        kill();
+     }
 
     cycles_to_wait = 1;
     *a = *b;
@@ -277,7 +282,12 @@ void Dcpu::IFB(unsigned short _a, unsigned short _b)
 }
 void Dcpu::kill()
 {
+    // kills the run loop
 	dont_kill = false;
+}
+bool Dcpu::isKilled()
+{
+    return dont_kill == false;
 }
 void Dcpu::MemoryDump()
 {
@@ -383,15 +393,12 @@ void Dcpu::PushInBuff(char c)
 
 void Dcpu::run()
 {
-    clock_t endTime;
-
-    endTime = clock() + time_to_kill * CLOCKS_PER_SEC / 1000; // after time_to_kill ms, CPU stops
 
     timeval start;
-    while(dont_kill || clock() < endTime)
+    while(dont_kill)
     {
         gettimeofday(&start, NULL);
-
+        old_PC = PC;
         unsigned short ins;
         unsigned short a;
         unsigned short b;
@@ -453,6 +460,7 @@ void Dcpu::run()
         if(!wait_cycles)
             wait(cycles_to_wait, start);
     }
+    cout << "done\n";
     if(DEBUG)
         MemoryDump();
 }
