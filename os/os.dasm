@@ -1,3 +1,5 @@
+; Author: ryban
+; DCOS
 ; Very Very VERY simplistic OS type system, with basic a malloc call, maybe
 ; This code does not abide by the de-facto standards we have in place.
 ; Might fix that later
