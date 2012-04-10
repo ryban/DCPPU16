@@ -4,7 +4,7 @@ using namespace std;
 
 #include <sys/time.h>
 
-#define RAM_SIZE 0x10000
+#define RAM_SIZE 0xffff // 64k words, 128k bytes
 #define NUM_REG 8
 #define CLOCK_SPEED 100000 // 100k Hz 
 
