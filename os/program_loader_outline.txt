@@ -7,7 +7,7 @@ Outline on how to make a program loadable by this OS
  SET PC, A
 
  The Global Variables are defined EXACTLY like this
-   :_offset dat 0xffff         ; function pointer to malloc
+   :_offset dat 0xffff         ; the programs offset in RAM
    :_malloc dat 0xfffe         ; function pointer to malloc
    :_free   dat 0xfffd         ; function pointer to free
    :_outptr dat 0xfffc         ; pointer to the output pointer for writing characters.
