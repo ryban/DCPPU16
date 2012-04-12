@@ -1,0 +1,100 @@
+; Implimentation of vim 
+; Need file I/O to do it properly but works for now
+
+
+; need lots of memory
+; each block of 64 words has a link to the next block on its last word
+; make sure to free it all
+:init
+        JSR malloc
+        SET J, A
+:main
+
+
+
+
+
+
+
+;==================================================================
+
+; Returns pointers to 64 word chunks
+; maintain a 256 word list of empty 64 word chunks
+; when you need a new one you loop through the 256 word list until you find an empty one
+; Multiply the index of that marker (from the 256 word array) by 64 to get the address
+; the value returned in A is a pointer to the start of the memory
+
+:malloc
+            SET A, 0
+            SET B, [heaparr]
+
+:l4
+            SET C, [B]
+            IFE C, 0
+                SET PC, found
+            IFG A, 0xff                     ; A > 255
+                SET PC, full
+
+            ADD A, 1
+            ADD B, 1
+            SET PC, l4
+
+:found
+            ;ADD B, A
+            SET [B], 0xffff                 ; mark chunk taken
+            MUL A, 0x40                     ; A * 64
+            SET B, [heap]
+            ADD A, B
+
+            SET PC, POP
+:full
+            SET A, 0x2000                   ; A hopefully harmless area...
+            SET PC, POP
+
+;=================================================================
+
+; releases memory given by malloc.
+; This IS NOT automatically done, be sure to free memory when you are done
+; A is the pointer to your memory chunk to be freed
+
+:free
+            SET B, [heap]
+            SUB A, B
+            DIV A, 64
+            SET B, [heaparr]
+            ADD A, B
+            SET [A], 0
+
+            SET PC, POP
+
+;==================================================================
+
+
+
+
+
+; various system various
+
+:heaparr    dat 0x9100                      ; that starting pointer for the heap for malloc
+:heap       dat 0x9200                      ; start of the stack of memory addresses
+
+
+; vim var
+
+:inputmode      dat 0           ; 0 is move(?) mode, 1 is input mode
+
+:insertmode     dat "a",0
+:quit           dat "q",0
+:save           dat "w",0
+
+:cursor         dat 0           ; positon of the cursor
+:screentop      dat 0           ; top line of screen to start render at
+:defaultcol     dat 0xff80      ; color of the text (white)
+:cursorcol      dat 0x1c00      ; color of the character under the cursor (green)
+
+:inleft         dat "h",0
+:ineight        dat "l",0
+:inup           dat "j",0
+:indown         dat "k",0
+
+:esc            dat 27

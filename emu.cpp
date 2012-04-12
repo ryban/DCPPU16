@@ -102,13 +102,9 @@ void AbnormalChar(sf::Event &Event, char &c)
         c = 127;
     else if(Event.Key.Code == sf::Key::Back)
         c = 8;
+    else if(Event.Key.Code == sf::Key::Escape)
+        c = 27;
 }
-
-//struct extern_program
-//{
-  //  char *file;
-    //int offset;
-//};
 
 int main(int argc, char *argv[])
 {
@@ -199,17 +195,36 @@ int main(int argc, char *argv[])
         {
             for(int j = 0; j < TERMINAL_WIDTH; j++)
             {
-                char c = buffer[j];
-                if(c == 0 || isspace(c))
-                    c = ' ';
-                row_t[j] = c;
+                unsigned short sc = buffer[j];
+                int r = (sc & 0xe000) >> 13;
+                int g = (sc & 0x1c00) >> 10;
+                int b = (sc & 0x0380) >> 7;
+
+                r = (((float)r / 9.0) * 255);
+                g = (((float)g / 9.0) * 255);
+                b = (((float)b / 9.0) * 255);
+                //r = 255 - r;
+                //g = 255 - g;
+                //b = 255 - b;
+
+                sf::Color textcol(r, g, b);
+                char *c = new char[2];
+                c[1] = 0;
+                c[0] = sc & 0x007f;
+                if(*c == 0 || isspace(*c))
+                    *c = ' ';
+                //row_t[j] = c;
+                Text.SetText(c);
+                Text.SetColor(textcol);
+                Text.SetPosition(15 + j * 18, i * 32 + 5);      // 18 = width of char, 32 = height of char
+                app.Draw(Text);
             }
-            Text.SetText(row_t);
-            Text.SetPosition(15, i * 32 + 5);
-            app.Draw(Text);
+            //Text.SetText(row_t);
+            //Text.SetPosition(15, i * 32 + 5);
+            //app.Draw(Text);
             buffer += TERMINAL_WIDTH;
-            for(int k = 0; k < TERMINAL_WIDTH; k++)
-                row_t[k] = ' ';
+            //for(int k = 0; k < TERMINAL_WIDTH; k++)
+                //row_t[k] = ' ';
         }
         app.Display();
     }

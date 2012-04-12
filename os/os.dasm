@@ -9,6 +9,7 @@
 ; Fall back to reset everything
 
 :boot
+            JSR initcolor
             JSR displayboot
             SET B, 0xd000
 :bootwait
@@ -31,7 +32,7 @@
             SET A, 0                        ; keeps track of how many characters have been entered
 
 :read
-            SET B, [inloc]                   ; start of out buffer
+            SET B, [inloc]                  ; start of out buffer
             ADD B, [inptr]
             IFE [B], 0
                 SET PC, read
@@ -43,10 +44,10 @@
             MOD B, 16
             SET [inptr], B
 
-            IFE A, 10                        ; newline
+            IFE A, 10                       ; newline
                 SET PC, react
 
-            IFE A, 8                         ; backspace
+            IFE A, 8                        ; backspace
                 SET PC, bkspc
 
             SET C, [outptr]
@@ -56,9 +57,10 @@
 
             SET [I], A
             SET C, [outptr]
-            SET [C], A
+            AND [C], 0xff80
+            BOR [C], A
             ADD I, 1
-            SET [I], 0                        ; NULL terminate
+            SET [I], 0                       ; NULL terminate
             ADD C, 1
             SET [outptr], C
 
@@ -77,7 +79,7 @@
 
             SET C, [outptr]
             SUB C, 1
-            SET [C], 0
+            AND [C], 0xff80
             SET [outptr], C
 
             SET PC, read
@@ -142,12 +144,10 @@
 
 :resetcarrot
             SET A, [bl]
-            SET [A], [carrot]
+            BOR [A], [carrot]
             ADD A, 1
             SET [outptr], A
-
                                             ; now clear the input string
-
             SET PC, POP
 
 ;==================================================================
@@ -160,7 +160,8 @@
             SET A, startmsg
             SET B, 0x8000
 :clr1                                       ; loop until message is printed
-            SET [B], [A]
+            AND [B], 0xff80
+            BOR [B], [A]
             ADD A, 1
             ADD B, 1
 
@@ -168,7 +169,7 @@
                 SET PC, clr2
             SET PC, clr1
 :clr2
-            SET [B], 0
+            AND [B], 0xff80
             ADD B, 1
             IFG 0x8180, B
                 SET PC, clr2
@@ -196,7 +197,7 @@
 :l3
             SET [0x8020 + A], [0x8040 + A]  ; move the row below, up            
             ADD A, 1
-            IFE A,  0x1e0
+            IFE A,  0x160
                 SET PC, ldone
             SET PC, l3
 
@@ -527,7 +528,7 @@
 
             IFE B, 0
                 SET PC, psrt
-
+            AND [C], 0xff8
             SET [C], B
             ADD C, 1                        ; incriment the outptr
             ADD A, 1
@@ -568,7 +569,8 @@
             JSR strprintrev                 ; recursion!
             SUB A, 1                        
             SET C, [outptr]
-            SET [C], [A]
+            AND [C], 0xff80
+            BOR [C], [A]
             ADD C, 1
             SET [outptr], C
 :rdone
@@ -631,8 +633,8 @@
             
 
 ;==========================================================================
-;Displays the boot splash screen
-; OH GOD ITS OFF BY ONE COLUMN ON THE TOP AND BOTTOM. SO ANNOYING.
+; Displays the boot splash screen
+
 :displayboot
             SET A, 0
 
@@ -641,39 +643,48 @@
             ADD B, A
 
             SET C, [boot0 + A]
-            SET [B], C
+            AND [B], 0xff80
+            BOR [B], C
             ADD B, 32
 
             SET C, [boot1 + A]
-            SET [B], C
+            AND [B], 0xff80
+            BOR [B], C
             ADD B, 32
 
             SET C, [boot2 + A]
-            SET [B], C
+            AND [B], 0xff80
+            BOR [B], C
             ADD B, 32
 
             SET C, [boot3 + A]
-            SET [B], C
+            AND [B], 0xff80
+            BOR [B], C
             ADD B, 32
 
             SET C, [boot4 + A]
-            SET [B], C
+            AND [B], 0xff80
+            BOR [B], C
             ADD B, 32
 
             SET C, [boot5 + A]
-            SET [B], C
+            AND [B], 0xff80
+            BOR [B], C
             ADD B, 32
 
             SET C, [boot6 + A]
-            SET [B], C
+            AND [B], 0xff80
+            BOR [B], C
             ADD B, 32
 
             SET C, [boot7 + A]
-            SET [B], C
+            AND [B], 0xff80
+            BOR [B], C
             ADD B, 32
 
             SET C, [boot8 + A]
-            SET [B], C
+            AND [B], 0xff80
+            BOR [B], C
             ADD B, 32
 
             ADD A, 1
@@ -690,7 +701,20 @@
 
 
 ;==========================================================================
+; Sets all of the color on all chars to white
 
+:initcolor
+            SET A, 0x8000
+            SET B, 0xff80
+
+:colloop
+            SET [A], B
+            ADD A, 1
+            IFG 0x8200, A
+                SET PC, colloop
+            SET PC, POP
+
+;==========================================================================
 ; Global values for the OS
 
 :outptr     dat 0x815f                      ; the current pointer for text output, should be the bottom line, after the > "text"

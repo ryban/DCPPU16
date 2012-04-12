@@ -35,6 +35,4 @@ and emulator. (http://denull.ru/dcpu/dcpu.htm). Very good debugger as well.
 
 To-do:
 
-- Add colored text support. 9-bit color, top 9 bits of each word in the output buffer.
-
 - Clean up code, in both the emulator, os.dasm
