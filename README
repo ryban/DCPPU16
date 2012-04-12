@@ -37,6 +37,4 @@ To-do:
 
 - Add colored text support. 9-bit color, top 9 bits of each word in the output buffer.
 
-- Limit emulator to 100k Hz so -f does something
-
 - Clean up code, in both the emulator, os.dasm
