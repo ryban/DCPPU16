@@ -10,15 +10,14 @@ using namespace std;
 #include <cstdlib>
 #include <iomanip>
 
-#include <sys/time.h>
+#include <SFML/System.hpp>
 
 #include "dcpu.h"
 
-Dcpu::Dcpu(ifstream &code, bool debug, bool fast)
+Dcpu::Dcpu(ifstream &code, bool debug)
 {
     DEBUG = debug;
     dont_kill = true;
-    wait_cycles = fast;
 
     registers = new unsigned short[NUM_REG];
     RAM = new unsigned short[RAM_SIZE];
@@ -26,6 +25,7 @@ Dcpu::Dcpu(ifstream &code, bool debug, bool fast)
     old_PC = 0;
     SP = 0xffff; // stack pointer starts at 0xffff and counts downwards
     O = 0;
+    key_buff_ptr = 0;
 
     literals = new unsigned short[LITERAL_VALUE_HIGH - LITERAL_VALUE_LOW];
     for(int i = 0; i < LITERAL_VALUE_HIGH - LITERAL_VALUE_LOW; i++)
@@ -51,19 +51,6 @@ Dcpu::~Dcpu()
 {
     delete [] registers;
     delete [] RAM;
-}
-
-// Waits for a given number of cpu cycles defined by CLOCK_SPEED
-void Dcpu::wait(int cycles, timeval &start)
-{
-    int endTime;
-    int clk_u = 1000000 / CLOCK_SPEED; // clock speed in microseconds
-
-    endTime = start.tv_usec + cycles * clk_u;
-
-    timeval end;
-    gettimeofday(&end, NULL);
-    while(end.tv_usec < endTime) { gettimeofday(&end, NULL); }
 }
 
 // returns a pointer to a value determined by a
@@ -242,10 +229,10 @@ void Dcpu::IFE(unsigned short _a, unsigned short _b)
     unsigned short *b = GetValuePtr(_b);
     //cout << "ife\n";
     cycles_to_wait = 3;
-    if(*a != *b)
-        skip_next_ins = true;
-    else
+    if(*a == *b)
         cycles_to_wait = 2;
+    else
+        skip_next_ins = true;
 }
 void Dcpu::IFN(unsigned short _a, unsigned short _b)
 {
@@ -253,10 +240,10 @@ void Dcpu::IFN(unsigned short _a, unsigned short _b)
     unsigned short *b = GetValuePtr(_b);
     //cout << "ifn\n";
     cycles_to_wait = 3;
-    if(*a == *b)
-        skip_next_ins = true;
-    else
+    if(*a != *b)
         cycles_to_wait = 2;
+    else
+        skip_next_ins = true;
 }
 void Dcpu::IFG(unsigned short _a, unsigned short _b)
 {
@@ -264,10 +251,10 @@ void Dcpu::IFG(unsigned short _a, unsigned short _b)
     unsigned short *b = GetValuePtr(_b);
     //cout << "ifg\n";
     cycles_to_wait = 3;
-    if(*a < *b)
-        skip_next_ins = true;
-    else
+    if(*a > *b)
         cycles_to_wait = 2;
+    else
+        skip_next_ins = true;
 }
 void Dcpu::IFB(unsigned short _a, unsigned short _b)
 {
@@ -387,17 +374,30 @@ unsigned short *Dcpu::GetScreenBuffer()
 void Dcpu::PushInBuff(char c)
 {
     // will not push to buffer if there is alread yachar in the buffer
-    if(RAM[INPUT_BUFFER] == 0)
-        RAM[INPUT_BUFFER] = c;
+    RAM[INPUT_BUFFER + key_buff_ptr] = c;
+    key_buff_ptr++;
+    key_buff_ptr %= 16; 
 }
 
 void Dcpu::run()
 {
-
-    timeval start;
+    sf::Clock clk;      // clock for timing
+    double cur_time = 1;
     while(dont_kill)
     {
-        gettimeofday(&start, NULL);
+        cur_time = clk.GetElapsedTime();
+
+        if(cycles_to_wait > 0)
+        {
+            if(cur_time > (double)(1.0/CLOCK_SPEED))
+            {
+                cycles_to_wait--;
+                clk.Reset();
+            }
+            continue;
+        }
+        clk.Reset();
+
         old_PC = PC;
         unsigned short ins;
         unsigned short a;
@@ -422,9 +422,6 @@ void Dcpu::run()
             skip_next_ins = false;
             continue;
         }
-        //if(PC != 26)
-          //  cout << PC;
-        //cout << hex << PC;
 
         // bbbb bbaa aaaa oooo
         ins = RAM[PC++];
@@ -433,10 +430,7 @@ void Dcpu::run()
 
         b = (ins & 0xfc00) >> 10;
    
-        //cout << "a=" << hex << *a << " b=" << hex << *b << endl;
         int opcode = ins & 0x000f;
-        //if(opcode == 0)
-            //cout << a << " " << b << endl;
         switch(opcode)
         {
             case NOB_: NonBasic(a, b); break;
@@ -456,9 +450,6 @@ void Dcpu::run()
             case IFG_: IFG(a, b); break;
             case IFB_: IFB(a, b); break;
         }
-
-        if(!wait_cycles)
-            wait(cycles_to_wait, start);
     }
     cout << "done\n";
     if(DEBUG)

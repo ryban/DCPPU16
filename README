@@ -24,9 +24,7 @@ Usage:
 ./dcppu <flags> <filename>
 
     Flags
-        -f  Runs the CPU as fast as possible. With or without makes no difference at this time...
-        -d  Outputs a memory dump file called mem.dump after the CPU finishes running. You need to run with -t to get a
-            memory dump if you are not running the graphical version.
+        -d  Outputs a memory dump file called mem.dump after the CPU finishes running.
             
             
 Assembling code:

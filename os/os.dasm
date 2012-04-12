@@ -1,5 +1,5 @@
 ; Author: ryban
-; DCOS
+; RYOS
 ; Very Very VERY simplistic OS type system, with basic a malloc call, maybe
 ; This code does not abide by the de-facto standards we have in place.
 ; Might fix that later
@@ -8,7 +8,14 @@
 ; Initialize the screen and start main
 ; Fall back to reset everything
 
-:init
+:boot
+            JSR displayboot
+            SET B, 0xd000
+:bootwait
+            SUB B, 1
+            IFG B, 0
+                SET PC, bootwait
+
             JSR clearscrn
             SET PC, main
 
@@ -24,27 +31,37 @@
             SET A, 0                        ; keeps track of how many characters have been entered
 
 :read
-            SET B, [inptr]                   ; start of out buffer
+            SET B, [inloc]                   ; start of out buffer
+            ADD B, [inptr]
             IFE [B], 0
                 SET PC, read
 
             SET A, [B]
+
             SET [B], 0
-            IFE A, 0xa                      ; newline
+            ADD B, 1
+            MOD B, 16
+            SET [inptr], B
+
+            IFE A, 10                        ; newline
                 SET PC, react
 
-            IFE A, 8                        ; backspace
+            IFE A, 8                         ; backspace
                 SET PC, bkspc
+
+            SET C, [outptr]
+            MOD C, 32
+            IFE C, 31
+                SET PC, read
 
             SET [I], A
             SET C, [outptr]
             SET [C], A
             ADD I, 1
-            SET [I], 0                      ; NULL terminate
+            SET [I], 0                        ; NULL terminate
             ADD C, 1
             SET [outptr], C
 
-            SET [B], 0
             SET PC, read
 
 :bkspc
@@ -153,7 +170,7 @@
 :clr2
             SET [B], 0
             ADD B, 1
-            IFG 0x8200, B
+            IFG 0x8180, B
                 SET PC, clr2
 
             JSR resetcarrot                     ; set the outptr to the bottom left past the '>'
@@ -177,7 +194,7 @@
                                             ; 0x8020 start of second line
                                             ; 0x8040 start of third line
 :l3
-            SET [0x801f + A], [0x8040 + A]  ; move the row below, up            
+            SET [0x8020 + A], [0x8040 + A]  ; move the row below, up            
             ADD A, 1
             IFE A,  0x1e0
                 SET PC, ldone
@@ -339,11 +356,14 @@
             SET PUSH, A
             
             JSR slength
-            SET C, A                    ; C = legntth of the string
+            SET C, A                    ; C = legnth of the string
             SET A, POP
             SET Y, 0
             SUB C, 1
+
 :atoi1
+            IFE C, 0xffff               ; (0 - 1) = 0xffff (-1)
+                SET PC, atoirt
             SET B, 10
             SET X, [A]
             SUB X, 0x30                 ; ascii -> decimal
@@ -362,8 +382,6 @@
 
             SUB C, 1
 
-            IFE C, 0xffff
-                SET PC, atoirt
             SET PC, atoi1
 
 :atoirt
@@ -561,6 +579,18 @@
 
 ;==========================================================================
 
+; On this system fractional numbers are represented in a Q 10.5 format.
+; Bit 15 is the sign bit, bits 5-14 are the integer parts, and bits 0 - 4 are the fractional parts
+; The resolution of the fraction is 1/32, while the range of the integer is -1024 - 922
+
+; addition and substraction work as normal
+; 
+:
+
+
+
+;==========================================================================
+
 ; incriments the random number in seed
 ; B, C are the min and max of the output
 ; if C == 0, no bound
@@ -601,14 +631,73 @@
             
 
 ;==========================================================================
+;Displays the boot splash screen
+; OH GOD ITS OFF BY ONE COLUMN ON THE TOP AND BOTTOM. SO ANNOYING.
+:displayboot
+            SET A, 0
 
+:displayloop
+            SET B, 0x8020
+            ADD B, A
+
+            SET C, [boot0 + A]
+            SET [B], C
+            ADD B, 32
+
+            SET C, [boot1 + A]
+            SET [B], C
+            ADD B, 32
+
+            SET C, [boot2 + A]
+            SET [B], C
+            ADD B, 32
+
+            SET C, [boot3 + A]
+            SET [B], C
+            ADD B, 32
+
+            SET C, [boot4 + A]
+            SET [B], C
+            ADD B, 32
+
+            SET C, [boot5 + A]
+            SET [B], C
+            ADD B, 32
+
+            SET C, [boot6 + A]
+            SET [B], C
+            ADD B, 32
+
+            SET C, [boot7 + A]
+            SET [B], C
+            ADD B, 32
+
+            SET C, [boot8 + A]
+            SET [B], C
+            ADD B, 32
+
+            ADD A, 1
+            IFE A, 32
+                SET PC, POP
+
+            SET B, 0x500
+
+:displaywait
+            SUB B, 1
+            IFG B, 0
+                SET PC, displaywait
+            SET PC, displayloop
+
+
+;==========================================================================
 
 ; Global values for the OS
 
-:outptr     dat 0x81cf                      ; the current pointer for text output, should be the bottom line, after the > "text"
-:bl         dat 0x81ce                      ; pointer to the bottom left of the terminal
+:outptr     dat 0x815f                      ; the current pointer for text output, should be the bottom line, after the > "text"
+:bl         dat 0x8160                      ; pointer to the bottom left of the terminal
 
-:inptr      dat 0x9000
+:inloc      dat 0x9000
+:inptr      dat 0                           ; location of the keyboard
 
 :heaparr    dat 0x9100                      ; that starting pointer for the heap for malloc
 :heap       dat 0x9200                      ; start of the stack of memory addresses
@@ -619,7 +708,19 @@
 
 :carrot     dat ">"                         ; I don't think this is actually called the carrot but whatever
 
-:startmsg   dat "    ====== DCOS v 0.3 ======    ",0
+:startmsg   dat "    ====== RYOS v 0.4 ======    ",0
+
+; Boot screen
+
+:boot0      dat "********************************"
+:boot1      dat "*..............................*"
+:boot2      dat "*............./****\\...........*"     ; \\ to get rid of escape char. might chagne to the value of a '\' char
+:boot3      dat "*............/******\\..........*"
+:boot4      dat "*...........|**RYOS**|.........*"
+:boot5      dat "*............\\******/..........*"
+:boot6      dat "*.............\\****/...........*"
+:boot7      dat "*.........................v0.4.*"
+:boot8      dat "********************************"
 
 :clear      dat "clear",0                   ; clears the screen and reprints starting message
 
@@ -630,6 +731,8 @@
 :randstr    dat "rand",0                    ; prints out a random number
 
 :srandstr   dat "srand",0                   ; sets the seed for the rng to the value that comes after srand
+
+:vimstr     dat "vim", 0                    ; this would be so awesome. NEED FILE I/O NOW.
 
 :seed       dat 0xd78e                      ; seed for the random number generator
 

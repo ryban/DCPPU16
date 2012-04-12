@@ -2,11 +2,20 @@
 #include <iostream>
 #include <cstdlib>
 #include <cstring>
+#include <sstream>
 
 #include <SFML/Graphics.hpp>
 #include <SFML/System.hpp>
 
 #include "dcpu.h"
+
+string itoa(long i)
+{
+    std::string s;
+    std::stringstream out;
+    out << i;
+    return out.str();
+}
 
 bool valid_number_string(char *str)
 {
@@ -95,6 +104,12 @@ void AbnormalChar(sf::Event &Event, char &c)
         c = 8;
 }
 
+//struct extern_program
+//{
+  //  char *file;
+    //int offset;
+//};
+
 int main(int argc, char *argv[])
 {
     if(argc < 2)
@@ -104,21 +119,16 @@ int main(int argc, char *argv[])
     }
 
     bool debug = false;
-    bool fast = false;
     int time_to_kill_ms = 0;
 
     // -d runs in debug mode, prints out memory dump at end
-    // -t <value> is the time in ms until the program exits (not very useful anymore)
-    // -f will not perform cycle checks, i.e. ignore the wait(cycles) command (Does nothing at the moment)
+    // --l <filename> <offset>
 
     for(int a = 1; a < argc - 1; a++)
     {
         if(!strcmp(argv[a], "-d"))
         {
             debug = true;
-        }else if(!strcmp(argv[a], "-f"))
-        {
-            fast = true;
         }else
         {
             cerr << "invalid command <" << argv[a] << ">. ignoring\n";
@@ -132,16 +142,27 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    Dcpu cpu(inFile, debug, fast);
+    Dcpu cpu(inFile, debug);
 
     sf::Thread cpu_thread(&start, &cpu);
 
     cpu_thread.Launch();
 
-    sf::RenderWindow app(sf::VideoMode(TERMINAL_WIDTH * 18 + 32, TERMINAL_HEIGHT * 32 + 5), "DCPPU: DCPU-16 Emulator");
+    sf::RenderWindow app(sf::VideoMode(TERMINAL_WIDTH * 18 + 32, TERMINAL_HEIGHT * 32 + 10), "DCPPU: DCPU-16 Emulator");
     bool running = true;
 
     app.SetFramerateLimit(30); // Getting 1500fps on somthing this simple seems wasteful
+
+    sf::Font fixedsysfont;
+    sf::String Text;
+        Text.SetSize(32);
+    if(!fixedsysfont.LoadFromFile("Fixedsys500c.ttf"))
+    {
+        cerr << "Could not load font <Fixedsys500c.ttf>. Using default\n";
+    }else
+    {
+        Text.SetFont(fixedsysfont);
+    }
 
     while(running)
     {
@@ -168,40 +189,28 @@ int main(int argc, char *argv[])
         }
         app.Clear(sf::Color(56, 83, 255));
 
-        sf::String Text;
-        Text.SetSize(32);
 
         unsigned short *buffer = cpu.GetScreenBuffer();
-
-        int row = 0;
-        int col = 0;
 
         char *row_t = new char[TERMINAL_WIDTH+1];
         row_t[TERMINAL_WIDTH] = 0;
 
-        for(int i = 0; i < TERMINAL_HEIGHT * TERMINAL_WIDTH; i++)
+        for(int i = 0; i < TERMINAL_HEIGHT; i++)
         {
-            char c = buffer[i];
-            if(c == '\n' || col >= TERMINAL_WIDTH)
+            for(int j = 0; j < TERMINAL_WIDTH; j++)
             {
-                Text.SetText(row_t);
-                Text.SetPosition(15, row * 32 + 5);
-                app.Draw(Text);
-
-                col = 0;
-                row++;
-                if(row >= TERMINAL_HEIGHT)
-                    break;
-                continue;
+                char c = buffer[j];
+                if(c == 0 || isspace(c))
+                    c = ' ';
+                row_t[j] = c;
             }
-            if(c == 0 || c == '\t')
-            {
-                c = ' ';
-            }
-            row_t[col] = c;
-            col++;
+            Text.SetText(row_t);
+            Text.SetPosition(15, i * 32 + 5);
+            app.Draw(Text);
+            buffer += TERMINAL_WIDTH;
+            for(int k = 0; k < TERMINAL_WIDTH; k++)
+                row_t[k] = ' ';
         }
-
         app.Display();
     }
     

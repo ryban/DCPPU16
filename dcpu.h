@@ -17,10 +17,11 @@ using namespace std;
 
 #define SCREEN_BUFFER 0x8000
 #define TERMINAL_WIDTH 32
-#define TERMINAL_HEIGHT 16
+#define TERMINAL_HEIGHT 12
 #define NUM_COLORS 0x1ff                // 9 bit color
 
 #define INPUT_BUFFER 0x9000
+#define INPUT_BUFFER_SIZE 16
 // 0x9000 is the input buffer.
 // make sure to set 0x9000 to 0 when you are done with it, or don't want it
 // Many people impliment a 16 char ring buffer at 0x9000, I did 1 char. Easier to deal with
@@ -77,7 +78,7 @@ using namespace std;
 class Dcpu
 {
     public:
-        Dcpu(ifstream &code, bool debug, bool fast);
+        Dcpu(ifstream &code, bool debug);
         ~Dcpu();
 
         void run();
@@ -89,7 +90,7 @@ class Dcpu
     private:
         bool DEBUG;
         bool dont_kill;
-        bool wait_cycles;
+
 
         unsigned short *registers;  // pointer to the registers, 8 total
         unsigned short *RAM;        // pointer to the RAM, 0x10000 words total, 128K 
@@ -101,7 +102,8 @@ class Dcpu
         bool skip_next_ins;
         int cycles_to_wait;
 
-        void wait(int cycles, timeval &start);
+        int key_buff_ptr;
+
         void init_terminal();
         void UpdateScreen();
         bool OctetNonZero(int index);
