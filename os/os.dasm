@@ -11,7 +11,7 @@
 :boot
             JSR initcolor
             JSR displayboot
-            SET B, 0xd000
+            SET B, 0xa000
 :bootwait
             SUB B, 1
             IFG B, 0
@@ -89,6 +89,12 @@
 
             SET [I], 0                      ; NULL terminate the string
 
+            SET A, J
+            SET B, sdstr
+            JSR cmpstr
+            IFE A, 1
+                JSR shutdown
+
             SET B, clear                    ; check if the input is "clear"
             SET A, J
 
@@ -96,7 +102,23 @@
             IFE A, 1
                 JSR clearscrn               ; input is "clear", so clear the screen
             IFE A, 1
-                SET PC, mainend                        
+                SET PC, mainend
+
+            SET A, J
+            SET B, sleepstr
+            JSR cmpstr
+            IFE A, 1
+                JSR sleep
+            IFE A, 1
+                SET PC, mainend
+
+            SET A, J
+            SET B, rebootstr
+
+            JSR cmpstr
+            IFE A, 1
+                SET PC, boot
+
             SET A, J                        ; check if it is rand
             SET B, randstr
 
@@ -206,6 +228,28 @@
 
             SET B, POP
             SET PC, POP
+
+;==================================================================
+
+;reads in and returns a character in A
+
+:getchar
+
+        SET A, [inloc]
+        ADD A, [inptr]
+        SET B, A
+        SET A, [A]
+        IFN A, 0
+            SET PC, gotchar 
+        SET PC, POP
+
+:gotchar
+        SET [B], 0
+        SET B, [inptr]
+        ADD B, 1
+        MOD B, 16
+        SET [inptr], B
+        SET PC, POP
 
 ;==================================================================
 
@@ -334,11 +378,30 @@
 
 :echo
             IFE B, 1
-                SET PC, POP             ; no strings after 'echo' so just POP
-            ADD A, 5                    ; jump past the word 'echo'
-                                        ; change that to a loop to move past the first string 
-                                        ; then recursivly call echo A, B-1 after printing the string
-            JSR printstr                ; print the string
+                SET PC, POP 
+            ADD A, 4                                 
+            
+:echoprint
+            ADD A, 1                            
+            JSR printstr
+            SUB B, 1
+            IFE B, 1
+                SET PC, eend
+
+            SET C, [outptr]
+            SET X, 0x20
+            AND [C], 0xff80
+            BOR [C], X
+            ADD C, 1
+            SET [outptr], C
+
+:eloop      ; loop to find the start of the next string      
+            ADD A, 1
+            IFE [A], 0
+                SET PC, echoprint
+            SET PC, eloop
+
+:eend
             JSR pushlines        
 
             SET PC, POP
@@ -528,8 +591,8 @@
 
             IFE B, 0
                 SET PC, psrt
-            AND [C], 0xff8
-            SET [C], B
+            AND [C], 0xff80
+            BOR [C], B
             ADD C, 1                        ; incriment the outptr
             ADD A, 1
             SET PC, pl
@@ -578,17 +641,6 @@
             SET B, POP
             SET A, POP
             SET PC, POP
-
-;==========================================================================
-
-; On this system fractional numbers are represented in a Q 10.5 format.
-; Bit 15 is the sign bit, bits 5-14 are the integer parts, and bits 0 - 4 are the fractional parts
-; The resolution of the fraction is 1/32, while the range of the integer is -1024 - 922
-
-; addition and substraction work as normal
-; 
-:
-
 
 
 ;==========================================================================
@@ -691,7 +743,7 @@
             IFE A, 32
                 SET PC, POP
 
-            SET B, 0x500
+            SET B, 0x200
 
 :displaywait
             SUB B, 1
@@ -713,6 +765,105 @@
             IFG 0x8200, A
                 SET PC, colloop
             SET PC, POP
+
+;==========================================================================
+
+; simple screen saver
+
+:sleep
+            SET PUSH, A
+            SET PUSH, X
+            SET PUSH, Y
+            SET Y, 0
+:sleeploop            
+            JSR nextrand
+            SET A, [seed]
+            MOD A, 2
+
+            SET B, [sleepchars + A]
+
+            JSR nextrand
+            SET C, [seed]
+            MOD C, 32                       ; random x value                      
+
+            JSR nextrand
+            SET A, 0x8000
+            ADD A, C
+            SET C, [seed]
+            SHL C, 7                        ; random color
+            AND C, 0x1800                   ; just the green
+            BOR C, B
+            SET [A], C                      ; set random char at the top of screen
+
+            ADD Y, 1
+            IFG 16, Y
+                SET PC, sleeploop
+            SET C, 0x2ff                     ; how long to sleep for
+            SET Y, 0
+:sleepwait
+            SUB C, 1
+            JSR getchar
+            IFN A, 0
+                SET PC, endsleep
+            IFG C, 0
+                SET PC, sleepwait
+
+            SET C, 0
+:sleepshift ; shift chars down
+            JSR nextrand
+            SET A, [seed]
+            MOD A, 3                        ; distance to shift
+            ADD A, 1
+            MUL A, 32
+            SET B, 0x8160
+            ADD B, C
+    :shiftcolumn
+            SET X, B
+            ADD X, 32
+            SET [X], [B]
+            SUB B, A
+            IFG X, 0x8000
+                SET PC, shiftcolumn
+            ADD C, 1
+            IFE C, 32
+                SET PC, sleeploop
+            SET PC, sleepshift
+
+:endsleep
+            JSR initcolor
+            JSR clearscrn
+            SET Y, POP
+            SET X, POP
+            SET A, POP
+            SET PC, POP
+
+;==========================================================================
+
+; Shuts down the system
+
+:shutdown
+            SET C, 0x01ff                   ; white text
+            SET A, 0x8000
+:shutdownloop
+
+            SET B, C
+            SHL B, 7
+            BOR B, 35
+            SET [A], B
+            ADD A, 1
+            ADD C, 2                   ; 0000 0000 1000 0000
+
+            SET X, 0xf0
+    :sdwait
+            SUB X, 1
+            IFG X, 0
+                SET PC, sdwait
+
+            IFE A, 0x8180
+                SET PC, stop
+            SET PC, shutdownloop
+
+:stop       SET PC, stop
 
 ;==========================================================================
 ; Global values for the OS
@@ -750,17 +901,21 @@
 
 :echocmd    dat "echo",0                    ; prints the message that comes after echo
 
-:sleep      dat "sleep",0                   ; prints out a screen saver, random characters moving around and what not.
+:sleepstr   dat "sleep",0                   ; prints out a screen saver, random characters moving around and what not. Its alright...
 
 :randstr    dat "rand",0                    ; prints out a random number
 
 :srandstr   dat "srand",0                   ; sets the seed for the rng to the value that comes after srand
 
-:vimstr     dat "vim", 0                    ; this would be so awesome. NEED FILE I/O NOW.
+:rebootstr  dat "reboot",0                  ; command to reset entire system
+
+:sdstr      dat "shutdown",0                ; command to shut down system
+
+;:vimstr     dat "vim", 0                    ; this would be so awesome. NEED FILE I/O NOW.
 
 :seed       dat 0xd78e                      ; seed for the random number generator
 
-:sleepchars dat "@#$%1HO476INGE0=\/^2_~+VZ3", 0     ; Characters for the screen saver
+:sleepchars dat "10"                        ; Characters for sleep mode
 
 ; Useful in game command possiblities
 
