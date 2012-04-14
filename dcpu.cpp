@@ -44,8 +44,6 @@ Dcpu::Dcpu(ifstream &code, bool debug)
     }
     PC = 0;
     code.close();
-
-    //init_terminal();
 }
 Dcpu::~Dcpu()
 {
@@ -154,10 +152,10 @@ void Dcpu::MUL(unsigned short _a, unsigned short _b)
     unsigned short *a = GetValuePtr(_a);
     unsigned short *b = GetValuePtr(_b);
     //cout << "mul\n";
+    O = (*a >> 16) & 0xffff;
+
     cycles_to_wait = 2;
     *a = (*a) * (*b); // that looks so confusing...
-
-    O = (*a >> 16) & 0xffff;
 }
 void Dcpu::DIV(unsigned short _a, unsigned short _b)
 {
@@ -165,7 +163,8 @@ void Dcpu::DIV(unsigned short _a, unsigned short _b)
     unsigned short *b = GetValuePtr(_b);
     //cout << "div\n";
     cycles_to_wait = 3;
-    O = ((*a << 16) / *b) & 0xffff;
+    int Otmp = (*a << 16) / *b;
+    O = Otmp & 0xffff;
     *a = *a / *b;
 }
 void Dcpu::MOD(unsigned short _a, unsigned short _b)
@@ -318,54 +317,6 @@ bool Dcpu::OctetNonZero(int index)
     return false;
 }
 
-void Dcpu::init_terminal()
-{
-    cout << "\033[2J";  // clear the screen
-    for(int h = 0; h < TERMINAL_HEIGHT; h++)
-    {
-        for(int w = 0; w < TERMINAL_WIDTH; w++)
-            cout << " ";
-        cout << endl;
-    }
-
-    //initialize the color table
-    /*
-    ColorTable = new short[NUM_COLORS];
-    // 512 colors total
-    // 3 bits for each r, g, b
-    for(int r = 0; r < 8; r++)
-        for(int g = 0; g < 8; g++)
-            for(int b = 0; b < 8; b++)
-                ColorTable[(r * 8 * 8) + (g * 8) + b] = (r << 6 | g << 2 | b);
-    */
-}
-
-void Dcpu::UpdateScreen()
-{
-    cout << "\033[" << 0 << ";" << 0 << "H"; // reset cursor to 0, 0                     
-    
-    for(int h = 0; h < TERMINAL_HEIGHT; h++)
-    {
-        for(int w = 0; w < TERMINAL_WIDTH; w++)
-        {
-            unsigned short word = RAM[SCREEN_BUFFER + (h * TERMINAL_WIDTH) + w];
-            //unsigned short color = word >> 7; // top 9 bits are the color
-            char c = (char) word;
-            if(c == 0)
-                cout << " ";
-            else if(c == '\n')          // outputing \n will cause weird things to happen, so we don't do it
-                for(int i = w; i < TERMINAL_WIDTH; i++)
-                {
-                    cout << " ";
-                    break;
-                }
-            else
-                cout << c;
-        }
-        cout << '\n';
-    }
-}
-
 unsigned short *Dcpu::GetScreenBuffer()
 {
 	return &RAM[SCREEN_BUFFER];
@@ -387,8 +338,10 @@ void Dcpu::run()
     {
         cur_time = clk.GetElapsedTime();
 
+        // loop to wait to count all cycles before continuing
         if(cycles_to_wait > 0)
         {
+            // doesn't decriment until 1/100000 seconds have passed
             if(cur_time > (double)(1.0/CLOCK_SPEED))
             {
                 cycles_to_wait--;
@@ -396,6 +349,7 @@ void Dcpu::run()
             }
             continue;
         }
+        // reset for next loop
         clk.Reset();
 
         old_PC = PC;
