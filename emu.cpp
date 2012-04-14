@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
             }
 
         }
-        app.Clear(sf::Color(56, 83, 255));
+        app.Clear();//sf::Color(56, 83, 255));
 
 
         unsigned short *buffer = cpu.GetScreenBuffer();
@@ -200,9 +200,9 @@ int main(int argc, char *argv[])
                 int g = (sc & 0x1c00) >> 10;
                 int b = (sc & 0x0380) >> 7;
 
-                r = (((float)r / 9.0) * 255);
-                g = (((float)g / 9.0) * 255);
-                b = (((float)b / 9.0) * 255);
+                r = (((float)r / 7.0) * 255);
+                g = (((float)g / 7.0) * 255);
+                b = (((float)b / 7.0) * 255);
                 //r = 255 - r;
                 //g = 255 - g;
                 //b = 255 - b;

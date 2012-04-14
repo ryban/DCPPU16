@@ -1,23 +1,196 @@
 ; Implimentation of vim 
 ; Need file I/O to do it properly but works for now
 
+; HOLY FUCK THIS IS DIFFICULT
 
 ; need lots of memory
-; each block of 64 words has a link to the next block on its last word
+; each block of 64 words has a link to the next block on its last word, and its previous block on its second to last word
+; so a doubly linked list for the text blocks
 ; make sure to free it all
+
 :init
-        JSR malloc
+        JSR malloc              ; allocate memory for the first bit of text
         SET J, A
+        SET [texthead], J
+        SET B, 0                ; init first block prev pointer to 0
+        JSR inittextblock       ; sets the prev pointer of the first block to 0, and sets the entire block to 0's
+        JSR malloc              ; allocate memory for command input
+        SET I, A
+        JSR initcolor
+
 :main
+        SET A, [inputmode]
+        IFN A, 0
+            SET PC, inmode
+        SET PC, cmdmode
+
+:inmode
+        ; insert text
+        ; involves a lot of moving text
+        JSR getchar
+        IFE A, 0
+            SET PC, inmode
+        IFE A, [esc]
+            SET PC, setcmdmode
+        IFE A, 8                ; backspace
+            SET PC, bckspctext
+
+        SET B, [cursor]
+        IFE B, 0
+            SET PC, inmode
+            
+        JSR insertchar
 
 
+:bckspctext
+        ; move cursor back one
+        ; if cursor == 0
+        SET B, [cursor]
+        IFE B, 0
+            SET PC, main
+        ; if [cursor] % 64 == 0
+        ; move to previous block and erase the last char there
 
 
+:cmdmode
+        ; prompt for commands
+        ; commands without a ':'
+        ;   - a - insert
+        ;   - h,j,k,l - move cursor
+        ;commands after a ':'
+        ;   - q - quit
+        ;   - w - save (aint gonna do shit unitl I get some file I/O)
+        JSR getchar
+
+        IFE A, insertmode
+            SET PC, setinsertmode
+        IFE A, inleft
+            SET PC, moveleft
+
+:setcmdmode
+        SET [inputmode], 1
+        SET PC, main
+
+:setinsertmode
+        SET [insertmode], 0
+        SET PC, main
+
+:moveleft
+        SET A, cursor
+        IFE A, 0
+            SET PC, main
+        SUB A, 1
+        ;JSR drawscreen
+        SET PC, main
+
+;==================================================================
+
+; inserts a char at the current cursor, and incriments the cursor
+; add more text blocks if needed, free up text blocks if also needed
 
 
 
 ;==================================================================
 
+;reads in and returns a character in A
+
+:getchar
+
+        SET A, [inloc]
+        ADD A, [inptr]
+        SET B, A
+        SET A, [A]
+        IFN A, 0
+            SET PC, gotchar 
+        SET PC, POP
+
+:gotchar
+        SET [B], 0
+        SET B, [inptr]
+        ADD B, 1
+        MOD B, 16
+        SET [inptr], B
+        SET PC, POP
+
+;==================================================================
+
+:getblockatcursor
+
+        SET A, [texthead]
+        SET B, [cursor]
+:checkblock
+        IFG B, 62               ; 63 is the next block pointer, 0 is the previous
+            SET PC, nextnode
+        SET PC, foundblock
+
+:nextnode
+        ADD A, 62
+        SET A, [A]              ; move to next node
+        SUB B, 62               ; 63 chars per block
+        SET PC, checkblock
+
+:foundblock
+        SET PC, POP        
+
+;==================================================================
+
+; value passed in A is the pointer to the block to init
+; value passed in B goes into the prev pointer part of the block
+
+:inittextblock
+        SET PUSH, A
+
+        ADD A, 62               ; 62 is the previous pointer
+        SET [A], B
+
+                                ; start setting all of the chars to 0
+        SET B, PEEK
+        SUB B, 1                ; so the loop works properly, while(A > B-1) === while(A >= B)
+:initblockloop      
+        SUB A, 1
+        IFG A, B
+            SET PC, initblockloop
+
+        SET A, POP
+        SET PC, POP
+
+;==================================================================
+
+;put this text block at the end of this list
+; A is the block to add
+:addtextblock
+        SET B, [texthead]
+:addloop
+        ADD B, 63
+        IFE [B], 0
+            SET PC, foundend
+        SET B, [B]              ;next block
+        SET PC, addloop
+
+:foundend
+        SET [B], A
+        SET PC, POP
+
+;==================================================================
+; frees all text blocks
+:freetext
+        SET A, [texthead]
+        SET B, A
+
+:freeloop        
+        ADD B, 63 
+        IFE [B], 0
+            SET PC, freedone
+        JSR free                ; free node
+        SET A, [B]
+        SET B, A
+        SET PC, freeloop
+
+:freedone
+        JSR free                ; free last element
+        SET PC, POP
+
+;==================================================================
 ; Returns pointers to 64 word chunks
 ; maintain a 256 word list of empty 64 word chunks
 ; when you need a new one you loop through the 256 word list until you find an empty one
@@ -25,76 +198,99 @@
 ; the value returned in A is a pointer to the start of the memory
 
 :malloc
-            SET A, 0
-            SET B, [heaparr]
+        SET A, 0
+        SET B, [heaparr]
 
 :l4
-            SET C, [B]
-            IFE C, 0
-                SET PC, found
-            IFG A, 0xff                     ; A > 255
-                SET PC, full
+        SET A, [B]
+        IFE A, 0
+            SET PC, found
+        IFG A, 0xff                     ; A > 255
+            SET PC, full
 
-            ADD A, 1
-            ADD B, 1
-            SET PC, l4
+        ADD A, 1
+        ADD B, 1
+        SET PC, l4
 
 :found
-            ;ADD B, A
-            SET [B], 0xffff                 ; mark chunk taken
-            MUL A, 0x40                     ; A * 64
-            SET B, [heap]
-            ADD A, B
+        ;ADD B, A
+        SET [B], 0xffff                 ; mark chunk taken
+        MUL A, 0x40                     ; A * 64
+        SET B, [heap]
+        ADD A, B
 
-            SET PC, POP
+        SET PC, POP
 :full
-            SET A, 0x2000                   ; A hopefully harmless area...
-            SET PC, POP
+        SET A, 0x2000                   ; A hopefully harmless area...
+        SET PC, POP
 
-;=================================================================
+;========================================================================
 
 ; releases memory given by malloc.
 ; This IS NOT automatically done, be sure to free memory when you are done
 ; A is the pointer to your memory chunk to be freed
 
 :free
-            SET B, [heap]
-            SUB A, B
-            DIV A, 64
-            SET B, [heaparr]
-            ADD A, B
-            SET [A], 0
+        SET B, [heap]
+        SUB A, B
+        DIV A, 64
+        SET B, [heaparr]
+        ADD A, B
+        SET [A], 0
 
-            SET PC, POP
+        SET PC, POP
 
-;==================================================================
+;=========================================================================
+; Sets all of the color on all chars to white
 
+:initcolor
+        SET A, 0x8000
+        SET B, 0xff80
 
+:colloop
+        SET [A], B
+        ADD A, 1
+        IFG 0x8200, A
+            SET PC, colloop
+        SET PC, POP
 
+;==========================================================================
 
+; draw text with offset
+
+;===========================================================================
+
+;shift the entire text left
+
+;===========================================================================
 
 ; various system various
 
-:heaparr    dat 0x9100                      ; that starting pointer for the heap for malloc
-:heap       dat 0x9200                      ; start of the stack of memory addresses
+:heaparr        dat 0x9100      ; that starting pointer for the heap for malloc
+:heap           dat 0x9200      ; start of the stack of memory addresses
 
+:inptr          dat 0
+:inloc          dat 0x9000
 
-; vim var
+:texthead       dat 0           ; pointer to the start of the text
 
-:inputmode      dat 0           ; 0 is move(?) mode, 1 is input mode
+; vim vars
 
-:insertmode     dat "a",0
-:quit           dat "q",0
-:save           dat "w",0
+:inputmode      dat 0           ; 0 is command mode, 1 is input mode
+
+:insertmode     dat "a"
+;:quit           dat "q"
+;:save           dat "w"
 
 :cursor         dat 0           ; positon of the cursor
 :screentop      dat 0           ; top line of screen to start render at
 :defaultcol     dat 0xff80      ; color of the text (white)
 :cursorcol      dat 0x1c00      ; color of the character under the cursor (green)
 
-:inleft         dat "h",0
-:ineight        dat "l",0
-:inup           dat "j",0
-:indown         dat "k",0
+:inleft         dat "h"
+:inright        dat "l"
+:inup           dat "j"
+:indown         dat "k"
 
 :esc            dat 27
+:colon          dat ":"

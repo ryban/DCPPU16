@@ -2,8 +2,6 @@
 
 using namespace std;
 
-#include <sys/time.h>
-
 #define RAM_SIZE 0x10000 // 64k words, 128k bytes
 #define NUM_REG 8
 #define CLOCK_SPEED 100000 // 100k Hz 
@@ -19,6 +17,17 @@ using namespace std;
 #define TERMINAL_WIDTH 32
 #define TERMINAL_HEIGHT 12
 #define NUM_COLORS 0x1ff                // 9 bit color
+
+#define FILE_BUFFER 0x8600              // starting point for the bytes to read in
+#define FILE_POINTER 0x85fe             // 32 bit pointer to the next position to read from. Not needed unless you want to reset it
+                                        // little endian [0x85ff](high bits) [0x85fe](low bits)
+#define FILE_FLAGS 0x85fd               // flags for file I/O and number ofwords read in
+// I/O flags
+// AAAA BBBB CCCC CCCC
+// A tells emulator to start reading the 64 bytes. Automatically set to 0 after read
+// B tells the DCPU when it is done reading.
+// 0 when not done, 1111 when it is done.
+// C is the number of words read on the last read. Will usually read a full 64 words
 
 #define INPUT_BUFFER 0x9000
 #define INPUT_BUFFER_SIZE 16
@@ -91,21 +100,18 @@ class Dcpu
         bool DEBUG;
         bool dont_kill;
 
-
         unsigned short *registers;  // pointer to the registers, 8 total
         unsigned short *RAM;        // pointer to the RAM, 0x10000 words total, 128K 
+        unsigned short *literals;
         unsigned short PC;          // program counter, points to RAM address of current instruciton
         unsigned short old_PC;      // the program counter from the start of the operation
         unsigned short SP;          // points to the top of the stack
         unsigned short O;           // register for overflow detection
-        unsigned short *literals;
         bool skip_next_ins;
         int cycles_to_wait;
 
         int key_buff_ptr;
 
-        void init_terminal();
-        void UpdateScreen();
         bool OctetNonZero(int index);
 
         unsigned short *GetValuePtr(int a); // gets a pointer to a value defined by an instruction
