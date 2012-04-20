@@ -3,11 +3,31 @@
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#include <ctime>
 
 #include <SFML/Graphics.hpp>
 #include <SFML/System.hpp>
 
 #include "dcpu.h"
+
+sf::Color color_table[16] = {
+    sf::Color::Black,
+    sf::Color(128, 0, 0),       // maroon
+    sf::Color(0, 128, 0),       // dark green
+    sf::Color(128, 128, 0),     // olive
+    sf::Color(0, 0, 128),       // navy blue
+    sf::Color(128, 0, 128),     // purple
+    sf::Color(0, 128, 128),     // teal/cyan
+    sf::Color(192, 192, 192),   // silver
+    sf::Color(128, 128, 128),   // grey
+    sf::Color::Red,
+    sf::Color::Green,
+    sf::Color::Yellow,
+    sf::Color::Blue,
+    sf::Color::Magenta,
+    sf::Color::Cyan,
+    sf::Color::White
+};
 
 string itoa(long i)
 {
@@ -106,6 +126,67 @@ void AbnormalChar(sf::Event &Event, char &c)
         c = 27;
 }
 
+void DrawCharacter(sf::Image &screen, unsigned short *font_buff, char c, sf::Color fg_col, sf::Color bg_col, bool blink, int x, int y)
+{
+    // set the area on the screen to the proper character c, defined in the font_buf
+    // use the colors fg_col and bg_col
+    // fonts defined in 2 words
+    // upperword aaaa bbbb cccc dddd
+    // lowerword eeee ffff gggg hhhh
+    // character defined as
+    /*
+        aaaa
+        bbbb
+        cccc
+        dddd
+        eeee
+        ffff
+        gggg
+        hhhh
+    */
+    // 1 is set to fg_col, 0 means set to bg col
+    int font_off_x = x * 4;
+    int font_off_y = y * 8;
+    //font_buff += (c * 2);   // 1 char per word
+
+    unsigned short fontupperword = font_buff[(c * 2)];
+    unsigned short fontlowerword = font_buff[(c * 2) + 1];
+
+    unsigned int font_char = fontupperword << 16 | fontlowerword;
+    //font_char = font_char >> 16 | font_char << 16; // rotate
+    //cout << hex << font_char << endl;
+    //for(int off = 0; off < 32; off++)
+    for(int off = 31; off >= 0; off--)
+    {
+        int mask = font_char & (1 << (31-off));
+        int x_img = font_off_x + (off % 4);
+        int y_img = font_off_y + (off / 4);
+        if(mask > 0 && !blink)
+        {
+            screen.SetPixel(x_img, y_img, fg_col);
+        }else
+        {
+            screen.SetPixel(x_img, y_img, bg_col);
+        }
+    }
+}
+
+void reverse_bits(unsigned int &v)
+{
+    // code from : http://graphics.stanford.edu/~seander/bithacks.html#BitReverseObvious
+    unsigned int r = v; // r will be reversed bits of v; first get LSB of v
+    int s = sizeof(v) * CHAR_BIT - 1; // extra shift needed at end
+
+    for (v >>= 1; v; v >>= 1)
+    {   
+      r <<= 1;
+      r |= v & 1;
+      s--;
+    }
+    r <<= s; // shift when v's highest bits are zero
+    v = r;
+}
+
 int main(int argc, char *argv[])
 {
     if(argc < 2)
@@ -118,7 +199,6 @@ int main(int argc, char *argv[])
     int time_to_kill_ms = 0;
 
     // -d runs in debug mode, prints out memory dump at end
-    // --l <filename> <offset>
 
     for(int a = 1; a < argc - 1; a++)
     {
@@ -142,24 +222,57 @@ int main(int argc, char *argv[])
 
     sf::Thread cpu_thread(&start, &cpu);
 
-    cpu_thread.Launch();
+    sf::RenderWindow app(sf::VideoMode(TERMINAL_WIDTH * 4 * 4, TERMINAL_HEIGHT * 8 * 4), "DCPPU: DCPU-16 Emulator");
 
-    sf::RenderWindow app(sf::VideoMode(TERMINAL_WIDTH * 18 + 32, TERMINAL_HEIGHT * 32 + 10), "DCPPU: DCPU-16 Emulator");
-    bool running = true;
+    app.SetFramerateLimit(30); // Getting 1500 fps on somthing this simple seems wasteful
 
-    app.SetFramerateLimit(30); // Getting 1500fps on somthing this simple seems wasteful
-
-    sf::Font fixedsysfont;
-    sf::String Text;
-        Text.SetSize(32);
-    if(!fixedsysfont.LoadFromFile("Fixedsys500c.ttf"))
+    sf::Image font;
+    if(!font.LoadFromFile("font.png"))
     {
-        cerr << "Could not load font <Fixedsys500c.ttf>. Using default\n";
-    }else
-    {
-        Text.SetFont(fixedsysfont);
+        cerr << "Could not load font\n";
+        return 1;
     }
 
+    unsigned short *buf = cpu.GetScreenBuffer();
+    buf += TERMINAL_WIDTH * TERMINAL_HEIGHT;
+
+    for(int char_off = 0; char_off < 128; char_off++)
+    {
+        int font_off_x = (char_off * 4) % 128;
+        int font_off_y = ((char_off * 4) / 128) * 8;
+
+        unsigned int font_char = 0;
+
+        for(int x = font_off_x; x < font_off_x + 4; x++)
+        {
+            for(int y = font_off_y; y < font_off_y + 8; y++)
+            {
+                sf::Color pix = font.GetPixel(x, y); 
+                //cout << x << ", " << y << " r:" << (int)pix.r << " g:" << (int)pix.g << " b:" << (int)pix.b;
+                //cout << hex << font_char;
+                if(pix != sf::Color(2, 1, 2))
+                    font_char |= 1 << (((y - font_off_y) * 4) + (x - font_off_x));
+                //cout << " " << font_char << endl;
+
+            }
+        }
+        reverse_bits(font_char);
+        unsigned short lowerword = font_char & 0xffff;
+        unsigned short upperword = (font_char >> 16) & 0xffff;
+        buf[char_off * 2] = upperword;
+        buf[char_off * 2 + 1] = lowerword;
+    }
+
+
+    sf::Image screen;
+    screen.Create(128, 96); // create black image
+    screen.SetSmooth(false);
+    sf::Sprite screen_sprite(screen);
+    screen_sprite.SetScale(4.0, 4.0);
+
+    cpu_thread.Launch();
+
+    bool running = true;
     while(running)
     {
         sf::Event Event;
@@ -179,53 +292,29 @@ int main(int argc, char *argv[])
                     cpu.PushInBuff(ShiftChar(c));
                 else
                     cpu.PushInBuff(c);
-
             }
-
         }
-        app.Clear();//sf::Color(56, 83, 255));
-
+        app.Clear();
 
         unsigned short *buffer = cpu.GetScreenBuffer();
-
-        char *row_t = new char[TERMINAL_WIDTH+1];
-        row_t[TERMINAL_WIDTH] = 0;
 
         for(int i = 0; i < TERMINAL_HEIGHT; i++)
         {
             for(int j = 0; j < TERMINAL_WIDTH; j++)
             {
-                unsigned short sc = buffer[j];
-                int r = (sc & 0xe000) >> 13;
-                int g = (sc & 0x1c00) >> 10;
-                int b = (sc & 0x0380) >> 7;
+                unsigned short sc = buffer[i * 32 + j];
+                int fg_off = (sc >> 12) & 0xf;
+                int bg_off = (sc >> 8) & 0xf;
+                sf::Color fg = color_table[fg_off];
+                sf::Color bg = color_table[bg_off];
+                char c = sc & 0x7f;
+                bool blink = (sc & 0x80) == 0x80 && (time(0) % 2 == 0);
 
-                r = (((float)r / 7.0) * 255);
-                g = (((float)g / 7.0) * 255);
-                b = (((float)b / 7.0) * 255);
-                //r = 255 - r;
-                //g = 255 - g;
-                //b = 255 - b;
-
-                sf::Color textcol(r, g, b);
-                char *c = new char[2];
-                c[1] = 0;
-                c[0] = sc & 0x007f;
-                if(*c == 0 || isspace(*c))
-                    *c = ' ';
-                //row_t[j] = c;
-                Text.SetText(c);
-                Text.SetColor(textcol);
-                Text.SetPosition(15 + j * 18, i * 32 + 5);      // 18 = width of char, 32 = height of char
-                app.Draw(Text);
+                DrawCharacter(screen, buffer + (TERMINAL_WIDTH*TERMINAL_HEIGHT), c, fg, bg, blink, j, i);
             }
-            //Text.SetText(row_t);
-            //Text.SetPosition(15, i * 32 + 5);
-            //app.Draw(Text);
-            buffer += TERMINAL_WIDTH;
-            //for(int k = 0; k < TERMINAL_WIDTH; k++)
-                //row_t[k] = ' ';
         }
+
+        app.Draw(screen_sprite);
         app.Display();
     }
     

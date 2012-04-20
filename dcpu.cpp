@@ -43,6 +43,7 @@ Dcpu::Dcpu(ifstream &code, bool debug)
         PC++;
     }
     PC = 0;
+
     code.close();
 }
 Dcpu::~Dcpu()

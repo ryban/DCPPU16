@@ -18,22 +18,10 @@ using namespace std;
 #define TERMINAL_HEIGHT 12
 #define NUM_COLORS 0x1ff                // 9 bit color
 
-#define FILE_BUFFER 0x8600              // starting point for the bytes to read in
-#define FILE_POINTER 0x85fe             // 32 bit pointer to the next position to read from. Not needed unless you want to reset it
-                                        // little endian [0x85ff](high bits) [0x85fe](low bits)
-#define FILE_FLAGS 0x85fd               // flags for file I/O and number ofwords read in
-// I/O flags
-// AAAA BBBB CCCC CCCC
-// A tells emulator to start reading the 64 bytes. Automatically set to 0 after read
-// B tells the DCPU when it is done reading.
-// 0 when not done, 1111 when it is done.
-// C is the number of words read on the last read. Will usually read a full 64 words
-
 #define INPUT_BUFFER 0x9000
 #define INPUT_BUFFER_SIZE 16
 // 0x9000 is the input buffer.
-// make sure to set 0x9000 to 0 when you are done with it, or don't want it
-// Many people impliment a 16 char ring buffer at 0x9000, I did 1 char. Easier to deal with
+// its a 16 char ring buffer
 
 
 #define NOB_ 0

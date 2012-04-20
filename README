@@ -31,8 +31,3 @@ Assembling code:
 
 I do not have an assembler, but there are a lot out there. I use deNull's assembler
 and emulator. (http://denull.ru/dcpu/dcpu.htm). Very good debugger as well.
-
-
-To-do:
-
-- Clean up code, in both the emulator, os.dasm

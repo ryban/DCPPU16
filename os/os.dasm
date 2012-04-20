@@ -1,176 +1,20 @@
 ; Author: ryban
 ; RYOS
-; Very Very VERY simplistic OS type system, with basic a malloc call, maybe
-; This code does not abide by the de-facto standards we have in place.
-; Might fix that later
+; Very Very VERY simplistic OS type system
 
-
-; Initialize the screen and start main
-; Fall back to reset everything
 
 :boot
-            JSR initcolor
-            JSR displayboot
-            SET B, 0xa000
+        JSR initcolor
+        JSR displayboot
+        SET B, 0x9000
 :bootwait
-            SUB B, 1
-            IFG B, 0
-                SET PC, bootwait
+        SUB B, 1
+        IFG B, 0
+            SET PC, bootwait
 
-            JSR clearscrn
-            SET PC, main
+        JSR clearscrn
+:crash  SET PC, crash
 
-
-;================================================================
-
-; Main program loop
-:main
-            JSR malloc                      ; allocate 64 words of memory for the input string
-            SET J, A
-            SET [indat], J
-            SET I, J
-            SET A, 0                        ; keeps track of how many characters have been entered
-
-:read
-            SET B, [inloc]                  ; start of out buffer
-            ADD B, [inptr]
-            IFE [B], 0
-                SET PC, read
-
-            SET A, [B]
-
-            SET [B], 0
-            ADD B, 1
-            MOD B, 16
-            SET [inptr], B
-
-            IFE A, 10                       ; newline
-                SET PC, react
-
-            IFE A, 8                        ; backspace
-                SET PC, bkspc
-
-            SET C, [outptr]
-            MOD C, 32
-            IFE C, 31
-                SET PC, read
-
-            SET [I], A
-            SET C, [outptr]
-            AND [C], 0xff80
-            BOR [C], A
-            ADD I, 1
-            SET [I], 0                       ; NULL terminate
-            ADD C, 1
-            SET [outptr], C
-
-            SET PC, read
-
-:bkspc
-            SET C, [outptr]
-            SUB C, 1
-            IFE [bl], C
-                SET PC, read
-            IFG [bl], C
-                SET PC, read 
-
-            SUB I, 1
-            SET [I], 0                      ; NULL terminate
-
-            SET C, [outptr]
-            SUB C, 1
-            AND [C], 0xff80
-            SET [outptr], C
-
-            SET PC, read
-
-:react
-            JSR pushlines                   ; start a new line
-
-            SET [I], 0                      ; NULL terminate the string
-
-            SET A, J
-            SET B, sdstr
-            JSR cmpstr
-            IFE A, 1
-                JSR shutdown
-
-            SET B, clear                    ; check if the input is "clear"
-            SET A, J
-
-            JSR cmpstr                      ; returns 1 if the strings are equal
-            IFE A, 1
-                JSR clearscrn               ; input is "clear", so clear the screen
-            IFE A, 1
-                SET PC, mainend
-
-            SET A, J
-            SET B, sleepstr
-            JSR cmpstr
-            IFE A, 1
-                JSR sleep
-            IFE A, 1
-                SET PC, mainend
-
-            SET A, J
-            SET B, rebootstr
-
-            JSR cmpstr
-            IFE A, 1
-                SET PC, boot
-
-            SET A, J                        ; check if it is rand
-            SET B, randstr
-
-            JSR cmpstr
-            IFE A, 1
-                JSR cmdrand                 ; execute the random command
-            IFE A, 1
-                SET PC, mainend
-
-            SET A, J
-            JSR splitstr                    ; seperate command by its spaces
-            SET C, A                        ; move the number of strings from A to C
-
-            SET A, J
-            SET B, echocmd
-            JSR cmpstr                      ; check if the first string is echo
-            IFE A, 1
-                SET PC, e1
-            SET PC, sra
-:e1
-            SET A, J
-            SET B, C
-            JSR echo
-            SET PC, mainend
-:sra
-            SET A, J
-            SET B, srandstr
-            JSR cmpstr
-            IFE A, 1
-                SET PC, sr1
-            SET PC, mainend
-:sr1
-            SET A, J
-            ADD A, 7                        ; the string that comes after srand
-            JSR srand
-:mainend
-            JSR resetcarrot
-            SET I, J                        ; reset I to its base of J
-            SET PC, read
-
-
-;==================================================================
-
-; Sets the carrot to the bottom left and puts the outptr after it
-
-:resetcarrot
-            SET A, [bl]
-            BOR [A], [carrot]
-            ADD A, 1
-            SET [outptr], A
-                                            ; now clear the input string
-            SET PC, POP
 
 ;==================================================================
 
@@ -178,56 +22,40 @@
 ; set thes outptr to the correct starting value
 
 :clearscrn
-            SET PUSH, A
-            SET A, startmsg
-            SET B, 0x8000
+    SET PUSH, A
+    SET A, startmsg
+    SET B, 0x8000
 :clr1                                       ; loop until message is printed
-            AND [B], 0xff80
-            BOR [B], [A]
-            ADD A, 1
-            ADD B, 1
+    AND [B], 0xff80
+    BOR [B], [A]
+    ADD A, 1
+    ADD B, 1
 
-            IFE [A], 0
-                SET PC, clr2
-            SET PC, clr1
+    IFE [A], 0
+        SET PC, clr2
+    SET PC, clr1
 :clr2
-            AND [B], 0xff80
-            ADD B, 1
-            IFG 0x8180, B
-                SET PC, clr2
+    AND [B], 0xffa0
+    ADD B, 1
+    IFG 0x8180, B
+        SET PC, clr2
 
-            JSR resetcarrot                     ; set the outptr to the bottom left past the '>'
+    JSR resetcarrot                     ; set the outptr to the bottom left past the '>'
 
-            SET A, POP
-            SET PC, POP
+    SET A, POP
+    SET PC, POP
 
 ;==================================================================
 
-; Moves all lines up one line, deleting ones that go off of the top of the terminal
-; A is over written don't keep stuff there
+; Sets the carrot to the bottom left and puts the outptr after it
 
-; To override this function, look at the compiled code and fine out what pushlines evaluated to
-; then set that to SET PC, <my_pushlines>.
-; Overriding it is helpful if you want to add the ability to scroll through previous lines
-
-:pushlines
-            SET PUSH, B
-
-            SET A, 0                        ; counter
-                                            ; 0x8020 start of second line
-                                            ; 0x8040 start of third line
-:l3
-            SET [0x8020 + A], [0x8040 + A]  ; move the row below, up            
-            ADD A, 1
-            IFE A,  0x160
-                SET PC, ldone
-            SET PC, l3
-
-:ldone
-            SET [outptr], [bl]
-
-            SET B, POP
-            SET PC, POP
+:resetcarrot
+    SET A, [topleft]
+    AND [A], 0xff80
+    BOR [A], [carrot]
+    ADD A, 1
+    SET [outptr], A
+    SET PC, POP
 
 ;==================================================================
 
@@ -235,21 +63,13 @@
 
 :getchar
 
-        SET A, [inloc]
-        ADD A, [inptr]
-        SET B, A
-        SET A, [A]
-        IFN A, 0
-            SET PC, gotchar 
-        SET PC, POP
+SET B, [inloc]
+ADD B, [inptr]
+SET A, [B]
+ADD B, 1
+SET [inptr], B
+SET PC, POP
 
-:gotchar
-        SET [B], 0
-        SET B, [inptr]
-        ADD B, 1
-        MOD B, 16
-        SET [inptr], B
-        SET PC, POP
 
 ;==================================================================
 
@@ -260,31 +80,31 @@
 ; the value returned in A is a pointer to the start of the memory
 
 :malloc
-            SET A, 0
-            SET B, [heaparr]
+    SET A, 0
+    SET B, [heaparr]
 
 :l4
-            SET C, [B]
-            IFE C, 0
-                SET PC, found
-            IFG A, 0xff                     ; A > 255
-                SET PC, full
+    SET C, [B]
+    IFE C, 0
+        SET PC, found
+    IFG A, 0xff                     ; A > 255
+        SET PC, full
 
-            ADD A, 1
-            ADD B, 1
-            SET PC, l4
+    ADD A, 1
+    ADD B, 1
+    SET PC, l4
 
 :found
-            ;ADD B, A
-            SET [B], 0xffff                 ; mark chunk taken
-            MUL A, 0x40                     ; A * 64
-            SET B, [heap]
-            ADD A, B
+    ;ADD B, A
+    SET [B], 0xffff                 ; mark chunk taken
+    MUL A, 0x40                     ; A * 64
+    SET B, [heap]
+    ADD A, B
 
-            SET PC, POP
+    SET PC, POP
 :full
-            SET A, 0x2000                   ; A hopefully harmless area...
-            SET PC, POP
+    SET A, 0x2000                   ; A hopefully harmless area...
+    SET PC, POP
 
 ;=================================================================
 
@@ -293,118 +113,14 @@
 ; A is the pointer to your memory chunk to be freed
 
 :free
-            SET B, [heap]
-            SUB A, B
-            DIV A, 64
-            SET B, [heaparr]
-            ADD A, B
-            SET [A], 0
+    SET B, [heap]
+    SUB A, B
+    DIV A, 64
+    SET B, [heaparr]
+    ADD A, B
+    SET [A], 0
 
-            SET PC, POP
-
-;==================================================================
-
-; Compares two NULL terminated strings and returns a 1 in A if they are equal
-; Values passed: A, str1 pointer, B, str2 pointer
-
-:cmpstr
-            SET PUSH, X
-            SET PUSH, Y
-
-            SET X, A
-            SET Y, B
-:cmpl
-            IFN [X], [Y]
-                SET PC, rf                  ; if at anytime two chars are not equal, the strings are not equal
-
-            ADD X, 1
-            ADD Y, 1
-            IFE [X], 0
-                SET PC, chkzero             ; check if y is 0. This they both are return true 
-            IFE [Y], 0                      ; return false, x is non 0 while y is
-                SET PC, rf
-
-            SET PC, cmpl
-:chkzero
-            IFE [X], [Y]
-                SET PC, rt
-
-
-:rt
-            SET A, 1
-            SET Y, POP
-            SET X, POP
-            SET PC, POP
-:rf
-            SET A, 0
-            SET Y, POP
-            SET X, POP
-            SET PC, POP
-
-
-;=================================================================
-
-; Seperates a string into multiple NULL terminated strings at the spaces
-; Pass A as the NUL terminated ptr
-; Returns the number of strings in A. So the command "echo hello" would return 2
-
-:splitstr
-            SET PUSH, B
-            SET PUSH, C
-
-            SET C, 1                    ; number of strings
-
-:spl1
-            IFE [A], 0
-                SET PC, splr
-            IFE [A], 0x20               ; [A] == 'space'
-                SET [A], 0
-            IFE [A], 0
-                ADD C, 1
-
-            ADD A, 1
-            SET PC, spl1
-:splr
-            SET A, C
-            SET C, POP
-            SET B, POP
-            SET PC, POP
-
-
-;=================================================================
-
-; prints the message that comes after "echo"
-; A is the split string pointer, B is the number of strings, but it only prints the first string after echo, for now
-
-:echo
-            IFE B, 1
-                SET PC, POP 
-            ADD A, 4                                 
-            
-:echoprint
-            ADD A, 1                            
-            JSR printstr
-            SUB B, 1
-            IFE B, 1
-                SET PC, eend
-
-            SET C, [outptr]
-            SET X, 0x20
-            AND [C], 0xff80
-            BOR [C], X
-            ADD C, 1
-            SET [outptr], C
-
-:eloop      ; loop to find the start of the next string      
-            ADD A, 1
-            IFE [A], 0
-                SET PC, echoprint
-            SET PC, eloop
-
-:eend
-            JSR pushlines        
-
-            SET PC, POP
+    SET PC, POP
 
 
 ;=================================================================
@@ -414,166 +130,219 @@
 ; Pointer the NULL terminated string passed in A
 
 :atoi
-            SET PUSH, X
-            SET PUSH, Y
+    SET PUSH, X
+    SET PUSH, Y
 
-            SET PUSH, A
-            
-            JSR slength
-            SET C, A                    ; C = legnth of the string
-            SET A, POP
-            SET Y, 0
-            SUB C, 1
+    SET PUSH, A
+    
+    JSR slength
+    SET C, A                    ; C = legnth of the string
+    SET A, POP
+    SET Y, 0
+    SUB C, 1
 
 :atoi1
-            IFE C, 0xffff               ; (0 - 1) = 0xffff (-1)
-                SET PC, atoirt
-            SET B, 10
-            SET X, [A]
-            SUB X, 0x30                 ; ascii -> decimal
+    IFE C, 0xffff               ; (0 - 1) = 0xffff (-1)
+        SET PC, atoirt
+    SET B, 10
+    SET X, [A]
+    SUB X, 0x30                 ; ascii -> decimal
 
-            ADD A, 1
-            SET PUSH, C
-            SET PUSH, A
-            
-            JSR pow
+    ADD A, 1
+    SET PUSH, C
+    SET PUSH, A
+    
+    JSR pow
 
-            MUL A, X
-            ADD Y, A
+    MUL A, X
+    ADD Y, A
 
-            SET A, POP
-            SET C, POP
+    SET A, POP
+    SET C, POP
 
-            SUB C, 1
+    SUB C, 1
 
-            SET PC, atoi1
+    SET PC, atoi1
 
 :atoirt
-            SET A, Y
-            SET Y, POP
-            SET X, POP
-            SET PC, POP
+    SET A, Y
+    SET Y, POP
+    SET X, POP
+    SET PC, POP
 
 ;======================================================================
 
 ;returns in A, B^C
 
 :pow
-            IFE B, 0
-                SET PC, rt0
-            IFE C, 0
-                SET PC, rt1
+    IFE B, 0
+        SET PC, rt0
+    IFE C, 0
+        SET PC, rt1
 
-            SET PUSH, B
-            SUB C, 1
+    SET PUSH, B
+    SUB C, 1
 
-            JSR pow
-            MUL A, B
+    JSR pow
+    MUL A, B
 
-            SET B, POP
-            SET PC, POP
+    SET B, POP
+    SET PC, POP
 :rt1
-            SET A, 1
-            SET PC, POP
+    SET A, 1
+    SET PC, POP
 
 :rt0
-            SET A, 0
-            SET PC, POP
-
+    SET A, 0
+    SET PC, POP
 
 ;====================================================================
 ; returns the length of a string passed in A
 
 :slength
-            SET B, A
-            SET A, 0
-            IFE [B], 0
-                SET PC, POP             ; length 0, return
+    SET B, A
+    SET A, 0
+    IFE [B], 0
+        SET PC, POP             ; length 0, return
 :sllp
-            ADD A, 1
-            ADD B, 1
-            IFN [B], 0
-                SET PC, sllp
-            SET PC, POP     
+    ADD A, 1
+    ADD B, 1
+    IFN [B], 0
+        SET PC, sllp
+    SET PC, POP     
 
-;====================================================================
-; converts a single character from upper to lower case
-; assumes you know its a character
+;=================================================================
 
-:tolower
-            ADD A, 32
-            SET PC, POP 
+; Seperates a string into multiple NULL terminated strings at the spaces
+; Pass A as the NUL terminated ptr
+; Returns the number of strings in A. So the command "echo hello" would return 2
 
+:splitstr
+    SET PUSH, B
+    SET PUSH, C
 
-; opposite of to lower
-:toupper
-            SUB A, 32
-            SET PC, POP
+    SET C, 1                    ; number of strings
 
-;======================================================================
+:spl1
+    IFE [A], 0
+        SET PC, splr
+    IFE [A], 0x20               ; [A] == 'space'
+        SET [A], 0
+    IFE [A], 0
+        ADD C, 1
 
-; converts a single character of hex to binary
-; Pass char in B, return in A
-; A > 15 if the character is not hex
-
-:chextobin
-            SET A, B
-            SUB A, 0x30
-            IFG A, 9
-                SET PC, chkrest
-            SET PC, POP                 ; Success
-
-:chkrest    
-            SET A, B
-            SUB A, 0x57
-            
-            SET PC, POP                 ; if A > 15 it failed, if A < 15 it is the correct value
+    ADD A, 1
+    SET PC, spl1
+:splr
+    SET A, C
+    SET C, POP
+    SET B, POP
+    SET PC, POP
 
 ;=====================================================================
-
 ; prints out a number
 ; A is the number to print
 
 ;short A;
 ;short B;
-;char str[5];
-;int i = 0; 
+;char str[6];
+;str[5] = 0
+;int i = 4; 
 ;while(A > 0)
 ;{
 ;    B = A % 10;
 ;    str[i] = itoa(B);
 ;    A /= 10;
-;    i++;
+;    i--;
 ;}
 ; the above c code will make a backwards string of the number A
-; assuming A > 0
+
 :printnum
-            SET PUSH, X
-            SET PUSH, A
-            JSR malloc                  ; memory for the new string
-            SET C, A
-            SET X, C
+    IFE A, 0
+        SET PC, n_zero
 
-            SET A, POP
+    SET PUSH, X
+    SET PUSH, A
+    JSR malloc                  ; memory for the new string
+    SET C, A
+    SET X, C
+    ADD X, 5
+    SET [X], 0
+    SUB X, 1
+
+    SET A, POP
 :pnl
-            SET B, A
-            MOD B, 10                   ; B = A % 10
-            DIV A, 10                   ; A /= 10
-            ADD B, 0x30                 ; itoa(B)
-            SET [X], B                  ; str[i] = itoa(B)
+    SET B, A
+    MOD B, 10                   ; B = A % 10
+    DIV A, 10                   ; A /= 10
+    ADD B, 0x30                 ; itoa(B)
+    SET [X], B                  ; str[i] = itoa(B)
 
-            ADD X, 1                    ; i++
-            IFN A, 0                    ; while(A > 0)
-                SET PC, pnl
+    SUB X, 1                    ; i++
+    IFN A, 0                    ; while(A > 0)
+        SET PC, pnl
 
-            SET [X], 0                  ; NULL terminate
-            SET A, C
-            JSR strprintrev
-                    
-            JSR free                    ; deallocate memory
+    ADD X, 4
+:remove_zeros
+    IFE [X], 0x30
+        SET [X], 0
+    IFN [X], 0x30
+        SET PC, pnum_done
+    SUB X, 1
+    SET PC, remove_zeros
 
-            SET X, POP
-            SET PC, POP
+:pnum_done
+    SET A, C
+    JSR printstr
+            
+    JSR free                    ; deallocate memory
+
+    SET X, POP
+    SET PC, POP
+
+:n_zero
+    ADD A, 0x30
+    JSR printchar
+    SET PC, POP
+
+;==================================================================
+
+; Compares two NULL terminated strings and returns a 1 in A if they are equal
+; Values passed: A, str1 pointer, B, str2 pointer
+
+:cmpstr
+    SET PUSH, X
+    SET PUSH, Y
+
+    SET X, A
+    SET Y, B
+:cmpl
+    IFN [X], [Y]
+        SET PC, rf                  ; if at anytime two chars are not equal, the strings are not equal
+
+    ADD X, 1
+    ADD Y, 1
+    IFE [X], 0
+        SET PC, chkzero             ; check if y is 0. This they both are return true 
+    IFE [Y], 0                      ; return false, x is non 0 while y is
+        SET PC, rf
+
+    SET PC, cmpl
+:chkzero
+    IFE [X], [Y]
+        SET PC, rt
+
+
+:rt
+    SET A, 1
+    SET Y, POP
+    SET X, POP
+    SET PC, POP
+:rf
+    SET A, 0
+    SET Y, POP
+    SET X, POP
+    SET PC, POP
 
 ;=======================================================================
 
@@ -581,68 +350,46 @@
 ; A should be a pointer to a NULL terminated string
 
 :printstr
-            SET PUSH, A
-            SET PUSH, B
-            SET PUSH, C
+    SET PUSH, A
+    SET PUSH, B
+    SET PUSH, C
 
-            SET C, [outptr]                 ; set c to outptr
+    SET C, [outptr]                 ; set c to outptr
 :pl  
-            SET B, [A]
+    SET B, [A]
 
-            IFE B, 0
-                SET PC, psrt
-            AND [C], 0xff80
-            BOR [C], B
-            ADD C, 1                        ; incriment the outptr
-            ADD A, 1
-            SET PC, pl
+    IFE B, 0
+        SET PC, psrt
+    AND [C], 0xff80
+    BOR [C], B
+    ADD C, 1                        ; incriment the outptr
+    ADD A, 1
+    SET PC, pl
 
 :psrt                                       ; printstr return
-            SET [outptr], C
+    SET [outptr], C
 
-            SET C, POP
-            SET B, POP
-            SET A, POP
-            SET PC, POP
+    SET C, POP
+    SET B, POP
+    SET A, POP
+    SET PC, POP
+
 
 ;==========================================================================
 
-; recursive funtion to print a NULL terminated string in reverse
-; A is a pointer to a string
-;
-;void reverse(char *str)
-;{
-;   if(str[0] != 0)
-;   {
-;       reverse(str + 1);
-;       cout << str[0];
-;   }
-;}
-; the above is strprintrev in c++
-:strprintrev
-            SET PUSH, A
-            SET PUSH, B
-            SET PUSH, C
+;prints a single char passed in A
 
-            IFE [A], 0
-                SET PC, rdone               ; base case
+:printchar
+    SET PUSH, B
 
-            SET B, A
-            ADD A, 1                        
-            JSR strprintrev                 ; recursion!
-            SUB A, 1                        
-            SET C, [outptr]
-            AND [C], 0xff80
-            BOR [C], [A]
-            ADD C, 1
-            SET [outptr], C
-:rdone
-            SET C, POP
-            SET B, POP
-            SET A, POP
-            SET PC, POP
+    SET B, [outptr]
+    AND [B], 0xff80
+    BOR [B], A
+    ADD B, 1
+    SET [outptr], B
 
-
+    SET B, POP
+    SET PC, POP
 ;==========================================================================
 
 ; incriments the random number in seed
@@ -651,225 +398,121 @@
 ; prime1 is 25717
 ; prime2 is 51437
 :nextrand
-            SET A, [seed]
-            ADD A, 51437
-            MUL A, [seed]
-            MOD A, 25717
-            ADD A, O
-            SET [seed], A
-            SET PC, POP
+    SET A, [seed]
+    ADD A, 51437
+    MUL A, [seed]
+    MOD A, 25717
+    ADD A, O
+    SET [seed], A
+    SET PC, POP
 
 ;==========================================================================
 ; seed the RNG with the string passed in A
 
 :srand
-            JSR atoi                        ; get the integer value of A
+    JSR atoi                        ; get the integer value of A
 
-            SET [seed], A
+    SET [seed], A
 
-            SET PC, POP
+    SET PC, POP
 
 ;==========================================================================
 
 ; Prints out a random number
 
 :cmdrand
-            SET PUSH, A
+    SET PUSH, A
 
-            JSR nextrand                     ; get a random number
-            SET A, [seed]                    ; rand puts new a random number in seed
-            JSR printnum                     ; print random number
-            JSR pushlines
-            SET A, POP
-            SET PC, POP 
-            
+    JSR nextrand                     ; get a random number
+    SET A, [seed]                    ; rand puts new a random number in seed
+    JSR printnum                     ; print random number
+    ;JSR pushlines
+    SET A, POP
+    SET PC, POP 
+    
 
 ;==========================================================================
-; Displays the boot splash screen
 
 :displayboot
-            SET A, 0
+    SET A, 0
 
 :displayloop
-            SET B, 0x8020
-            ADD B, A
+    SET B, 0x8020
+    ADD B, A
 
-            SET C, [boot0 + A]
-            AND [B], 0xff80
-            BOR [B], C
-            ADD B, 32
+    SET C, [boot0 + A]
+    AND [B], 0xff80
+    BOR [B], C
+    ADD B, 32
 
-            SET C, [boot1 + A]
-            AND [B], 0xff80
-            BOR [B], C
-            ADD B, 32
+    SET C, [boot1 + A]
+    AND [B], 0xff80
+    BOR [B], C
+    ADD B, 32
 
-            SET C, [boot2 + A]
-            AND [B], 0xff80
-            BOR [B], C
-            ADD B, 32
+    SET C, [boot2 + A]
+    AND [B], 0xff80
+    BOR [B], C
+    ADD B, 32
 
-            SET C, [boot3 + A]
-            AND [B], 0xff80
-            BOR [B], C
-            ADD B, 32
+    SET C, [boot3 + A]
+    AND [B], 0xff80
+    BOR [B], C
+    ADD B, 32
 
-            SET C, [boot4 + A]
-            AND [B], 0xff80
-            BOR [B], C
-            ADD B, 32
+    SET C, [boot4 + A]
+    AND [B], 0xff80
+    BOR [B], C
+    ADD B, 32
 
-            SET C, [boot5 + A]
-            AND [B], 0xff80
-            BOR [B], C
-            ADD B, 32
+    SET C, [boot5 + A]
+    AND [B], 0xff80
+    BOR [B], C
+    ADD B, 32
 
-            SET C, [boot6 + A]
-            AND [B], 0xff80
-            BOR [B], C
-            ADD B, 32
+    SET C, [boot6 + A]
+    AND [B], 0xff80
+    BOR [B], C
+    ADD B, 32
 
-            SET C, [boot7 + A]
-            AND [B], 0xff80
-            BOR [B], C
-            ADD B, 32
+    SET C, [boot7 + A]
+    AND [B], 0xff80
+    BOR [B], C
+    ADD B, 32
 
-            SET C, [boot8 + A]
-            AND [B], 0xff80
-            BOR [B], C
-            ADD B, 32
+    SET C, [boot8 + A]
+    AND [B], 0xff80
+    BOR [B], C
+    ADD B, 32
 
-            ADD A, 1
-            IFE A, 32
-                SET PC, POP
+    ADD A, 1
+    IFE A, 32
+        SET PC, POP
 
-            SET B, 0x200
+    SET B, 0x200
 
 :displaywait
-            SUB B, 1
-            IFG B, 0
-                SET PC, displaywait
-            SET PC, displayloop
-
+    SUB B, 1
+    IFG B, 0
+        SET PC, displaywait
+    SET PC, displayloop
 
 ;==========================================================================
-; Sets all of the color on all chars to white
+; initialize the screen color
 
 :initcolor
-            SET A, 0x8000
-            SET B, 0xff80
+    SET A, 0x8000
+    SET B, 0xfc20                   ; white test, cyan background, space character
 
 :colloop
-            SET [A], B
-            ADD A, 1
-            IFG 0x8200, A
-                SET PC, colloop
-            SET PC, POP
+    SET [A], B
+    ADD A, 1
+    IFG 0x8180, A
+        SET PC, colloop
+    SET PC, POP
 
-;==========================================================================
-
-; simple screen saver
-
-:sleep
-            SET PUSH, A
-            SET PUSH, X
-            SET PUSH, Y
-            SET Y, 0
-:sleeploop            
-            JSR nextrand
-            SET A, [seed]
-            MOD A, 2
-
-            SET B, [sleepchars + A]
-
-            JSR nextrand
-            SET C, [seed]
-            MOD C, 32                       ; random x value                      
-
-            JSR nextrand
-            SET A, 0x8000
-            ADD A, C
-            SET C, [seed]
-            SHL C, 7                        ; random color
-            AND C, 0x1800                   ; just the green
-            BOR C, B
-            SET [A], C                      ; set random char at the top of screen
-
-            ADD Y, 1
-            IFG 16, Y
-                SET PC, sleeploop
-            SET C, 0x2ff                     ; how long to sleep for
-            SET Y, 0
-:sleepwait
-            SUB C, 1
-            JSR getchar
-            IFN A, 0
-                SET PC, endsleep
-            IFG C, 0
-                SET PC, sleepwait
-
-            SET C, 0
-:sleepshift ; shift chars down
-            JSR nextrand
-            SET A, [seed]
-            MOD A, 3                        ; distance to shift
-            ADD A, 1
-            MUL A, 32
-            SET B, 0x8160
-            ADD B, C
-    :shiftcolumn
-            SET X, B
-            ADD X, 32
-            SET [X], [B]
-            SUB B, A
-            IFG X, 0x8000
-                SET PC, shiftcolumn
-            ADD C, 1
-            IFE C, 32
-                SET PC, sleeploop
-            SET PC, sleepshift
-
-:endsleep
-            JSR initcolor
-            JSR clearscrn
-            SET Y, POP
-            SET X, POP
-            SET A, POP
-            SET PC, POP
-
-;==========================================================================
-
-; Shuts down the system
-
-:shutdown
-            SET C, 0x01ff                   ; white text
-            SET A, 0x8000
-:shutdownloop
-
-            SET B, C
-            SHL B, 7
-            BOR B, 35
-            SET [A], B
-            ADD A, 1
-            ADD C, 2                   ; 0000 0000 1000 0000
-
-            SET X, 0xf0
-    :sdwait
-            SUB X, 1
-            IFG X, 0
-                SET PC, sdwait
-
-            IFE A, 0x8180
-                SET PC, stop
-            SET PC, shutdownloop
-
-:stop       SET PC, stop
-
-;==========================================================================
-; Global values for the OS
-
-:outptr     dat 0x815f                      ; the current pointer for text output, should be the bottom line, after the > "text"
-:bl         dat 0x8160                      ; pointer to the bottom left of the terminal
+:outptr     dat 0x8021                      ; the current pointer for text output, should be the bottom line, after the > "text"
+:topleft    dat 0x8020                      ; pointer to the bottom left of the terminal
 
 :inloc      dat 0x9000
 :inptr      dat 0                           ; location of the keyboard
@@ -881,7 +524,8 @@
 
 ; Data for use in terminal commands
 
-:carrot     dat ">"                         ; I don't think this is actually called the carrot but whatever
+:carrot     dat ">"      
+
 
 :startmsg   dat "    ====== RYOS v 0.4 ======    ",0
 
@@ -897,31 +541,7 @@
 :boot7      dat "*.........................v0.4.*"
 :boot8      dat "********************************"
 
-:clear      dat "clear",0                   ; clears the screen and reprints starting message
 
-:echocmd    dat "echo",0                    ; prints the message that comes after echo
 
-:sleepstr   dat "sleep",0                   ; prints out a screen saver, random characters moving around and what not. Its alright...
-
-:randstr    dat "rand",0                    ; prints out a random number
-
-:srandstr   dat "srand",0                   ; sets the seed for the rng to the value that comes after srand
-
-:rebootstr  dat "reboot",0                  ; command to reset entire system
-
-:sdstr      dat "shutdown",0                ; command to shut down system
-
-;:vimstr     dat "vim", 0                    ; this would be so awesome. NEED FILE I/O NOW.
 
 :seed       dat 0xd78e                      ; seed for the random number generator
-
-:sleepchars dat "10"                        ; Characters for sleep mode
-
-; Useful in game command possiblities
-
-; - chkpwr  print out current power usage and total power available
-; - chkloc  assumine there is a positioning system, print out ships current pos, and velocity
-; - combat  enters low power mode inorder to put more power towards weapons and shields
-;           low power being dim lights, and if possible, run the cpu at a lower clock rate
-; - inv     assuming there is a storage bay, keep records of all items and print them here
-; - bc      broadcast a message over radio. Works like echo.
