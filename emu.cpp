@@ -128,23 +128,25 @@ void AbnormalChar(sf::Event &Event, char &c)
 
 void DrawCharacter(sf::Image &screen, unsigned short *font_buff, char c, sf::Color fg_col, sf::Color bg_col, bool blink, int x, int y)
 {
-    // set the area on the screen to the proper character c, defined in the font_buf
-    // use the colors fg_col and bg_col
-    // fonts defined in 2 words
-    // upperword aaaa bbbb cccc dddd
-    // lowerword eeee ffff gggg hhhh
-    // character defined as
     /*
-        aaaa
-        bbbb
-        cccc
-        dddd
-        eeee
-        ffff
-        gggg
-        hhhh
+    set the area on the screen to the proper character c, defined in the font_buf
+    use the colors fg_col and bg_col
+    fonts defined in 2 words
+    upperword aaaa bbbb cccc dddd
+    lowerword eeee ffff gggg hhhh
+    character defined as
+    
+        a a a a
+        b b b b
+        c c c c
+        d d d d
+        e e e e
+        f f f f
+        g g g g
+        h h h h
+    
+    1 means set to fg_col, 0 means set to bg col
     */
-    // 1 is set to fg_col, 0 means set to bg col
     int font_off_x = x * 4;
     int font_off_y = y * 8;
     //font_buff += (c * 2);   // 1 char per word
@@ -153,21 +155,19 @@ void DrawCharacter(sf::Image &screen, unsigned short *font_buff, char c, sf::Col
     unsigned short fontlowerword = font_buff[(c * 2) + 1];
 
     unsigned int font_char = fontupperword << 16 | fontlowerword;
-    //font_char = font_char >> 16 | font_char << 16; // rotate
-    //cout << hex << font_char << endl;
-    //for(int off = 0; off < 32; off++)
+
+    //for(int off = 0; off < 32; off++) // for reverse
     for(int off = 31; off >= 0; off--)
     {
-        int mask = font_char & (1 << (31-off));
+        unsigned int mask = font_char & (1 << (31-off));
         int x_img = font_off_x + (off % 4);
         int y_img = font_off_y + (off / 4);
+
         if(mask > 0 && !blink)
-        {
             screen.SetPixel(x_img, y_img, fg_col);
-        }else
-        {
+        else
             screen.SetPixel(x_img, y_img, bg_col);
-        }
+        
     }
 }
 
@@ -236,27 +236,26 @@ int main(int argc, char *argv[])
     unsigned short *buf = cpu.GetScreenBuffer();
     buf += TERMINAL_WIDTH * TERMINAL_HEIGHT;
 
+    // load and encode character set into RAM
     for(int char_off = 0; char_off < 128; char_off++)
     {
         int font_off_x = (char_off * 4) % 128;
         int font_off_y = ((char_off * 4) / 128) * 8;
 
         unsigned int font_char = 0;
-
+        int x_ = 0;
+        int y_ = 0;
         for(int x = font_off_x; x < font_off_x + 4; x++)
         {
             for(int y = font_off_y; y < font_off_y + 8; y++)
             {
                 sf::Color pix = font.GetPixel(x, y); 
-                //cout << x << ", " << y << " r:" << (int)pix.r << " g:" << (int)pix.g << " b:" << (int)pix.b;
-                //cout << hex << font_char;
                 if(pix != sf::Color(2, 1, 2))
-                    font_char |= 1 << (((y - font_off_y) * 4) + (x - font_off_x));
-                //cout << " " << font_char << endl;
-
+                    font_char |= 1 << (31-((y_ * 4) + x_));
+                y_++;
             }
+            x_++;
         }
-        reverse_bits(font_char);
         unsigned short lowerword = font_char & 0xffff;
         unsigned short upperword = (font_char >> 16) & 0xffff;
         buf[char_off * 2] = upperword;
@@ -287,7 +286,7 @@ int main(int argc, char *argv[])
             if(Event.Type == sf::Event::KeyPressed)
             {
                 char c = Event.Key.Code;
-                AbnormalChar(Event, c);
+                AbnormalChar(Event, c);     // fix incorrect ascii values sfml uses
                 if(Event.Key.Shift)
                     cpu.PushInBuff(ShiftChar(c));
                 else
@@ -298,19 +297,19 @@ int main(int argc, char *argv[])
 
         unsigned short *buffer = cpu.GetScreenBuffer();
 
-        for(int i = 0; i < TERMINAL_HEIGHT; i++)
+        for(int y = 0; y < TERMINAL_HEIGHT; y++)
         {
-            for(int j = 0; j < TERMINAL_WIDTH; j++)
+            for(int x = 0; x < TERMINAL_WIDTH; x++)
             {
-                unsigned short sc = buffer[i * 32 + j];
+                unsigned short sc = buffer[y * 32 + x];
                 int fg_off = (sc >> 12) & 0xf;
                 int bg_off = (sc >> 8) & 0xf;
                 sf::Color fg = color_table[fg_off];
                 sf::Color bg = color_table[bg_off];
                 char c = sc & 0x7f;
-                bool blink = (sc & 0x80) == 0x80 && (time(0) % 2 == 0);
+                bool blink = (sc & 0x80) == 0x80 && (time(0) % 2 == 0); // if bit 15 set, blink on for 1 sec, off for 1 sec
 
-                DrawCharacter(screen, buffer + (TERMINAL_WIDTH*TERMINAL_HEIGHT), c, fg, bg, blink, j, i);
+                DrawCharacter(screen, buffer + (TERMINAL_WIDTH*TERMINAL_HEIGHT), c, fg, bg, blink, x, y);
             }
         }
 
