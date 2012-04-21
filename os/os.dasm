@@ -4,17 +4,72 @@
 
 
 :boot
-        JSR initcolor
-        JSR displayboot
-        SET B, 0x9000
+    JSR initcolor
+    JSR displayboot
+    SET B, 0x9000
 :bootwait
-        SUB B, 1
-        IFG B, 0
-            SET PC, bootwait
+    SUB B, 1
+    IFG B, 0
+        SET PC, bootwait
 
-        JSR clearscrn
-:crash  SET PC, crash
+    JSR clearscrn
+    SET PC, main
 
+
+;==================================================================
+
+:main
+    JSR malloc
+    SET J, A
+    SET [indat], J
+
+    SET A, [outptr]
+    AND [A], 0xf0ff
+    BOR [A], [cursorcol]
+    SET A, 0
+
+:read
+    JSR getchar
+    IFE A, 0
+        SET PC, read
+
+    IFE A, 8
+        SET PC, backspace
+    IFE A, 10
+        SET PC, react
+
+    SET [J], A
+    ADD J, 1
+
+    SET B, [outptr]
+    AND [B], 0xf000
+    BOR [B], A
+
+    ADD B, 1
+    AND [B], 0xf0ff
+    BOR [B], [cursorcol]
+    SET [outptr], B
+
+    SET PC, read
+
+:backspace
+    SET B, [outptr]
+    IFE B, [linestart]
+        SET PC, read
+
+    SET [B], 0xf020
+    SUB B, 1
+    SET [B], 0xf020
+    BOR [B], [cursorcol]
+
+    SET [outptr], B
+    SET PC, mainreset
+
+:react
+
+:mainreset
+
+    SET PC, read
 
 ;==================================================================
 
@@ -23,8 +78,10 @@
 
 :clearscrn
     SET PUSH, A
+
     SET A, startmsg
     SET B, 0x8000
+
 :clr1                                       ; loop until message is printed
     AND [B], 0xff80
     BOR [B], [A]
@@ -35,7 +92,8 @@
         SET PC, clr2
     SET PC, clr1
 :clr2
-    AND [B], 0xffa0
+    AND [B], 0xff80
+    BOR [B], 0x20
     ADD B, 1
     IFG 0x8180, B
         SET PC, clr2
@@ -50,6 +108,9 @@
 ; Sets the carrot to the bottom left and puts the outptr after it
 
 :resetcarrot
+    SET A, [outptr]
+    SET [A], 0xf020             ; white text, black background, space
+
     SET A, [topleft]
     AND [A], 0xff80
     BOR [A], [carrot]
@@ -66,7 +127,9 @@
 SET B, [inloc]
 ADD B, [inptr]
 SET A, [B]
+SET [B], 0
 ADD B, 1
+MOD B, 16
 SET [inptr], B
 SET PC, POP
 
@@ -489,7 +552,7 @@ SET PC, POP
     IFE A, 32
         SET PC, POP
 
-    SET B, 0x200
+    SET B, 0x100
 
 :displaywait
     SUB B, 1
@@ -502,7 +565,7 @@ SET PC, POP
 
 :initcolor
     SET A, 0x8000
-    SET B, 0xfc20                   ; white test, cyan background, space character
+    SET B, 0xf020                   ; white text, black background, space character
 
 :colloop
     SET [A], B
@@ -511,8 +574,10 @@ SET PC, POP
         SET PC, colloop
     SET PC, POP
 
-:outptr     dat 0x8021                      ; the current pointer for text output, should be the bottom line, after the > "text"
-:topleft    dat 0x8020                      ; pointer to the bottom left of the terminal
+:outptr     dat 0x8021                      ; the current pointer for text output, should be after the > "text"
+:topleft    dat 0x8020                      ; pointer to the top left of the terminal
+:cursorcol  dat 0x0800                      ; green background for cursor
+:linestart  dat 0x8021
 
 :inloc      dat 0x9000
 :inptr      dat 0                           ; location of the keyboard
@@ -526,8 +591,7 @@ SET PC, POP
 
 :carrot     dat ">"      
 
-
-:startmsg   dat "    ====== RYOS v 0.4 ======    ",0
+:startmsg   dat "    ", 10, 10, 10, 10, 10" RYOS v 0.4 "10, 10, 10, 10, 10"    ",0
 
 ; Boot screen
 

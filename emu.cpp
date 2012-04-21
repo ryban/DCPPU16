@@ -31,7 +31,6 @@ sf::Color color_table[16] = {
 
 string itoa(long i)
 {
-    std::string s;
     std::stringstream out;
     out << i;
     return out.str();
@@ -50,80 +49,6 @@ void start(void *usr)
     // CPU thread
     Dcpu *cpu = static_cast<Dcpu *> (usr);
     cpu->run();
-}
-
-char ShiftChar(char c)
-{
-    if(isalpha(c))
-        return toupper(c);
-
-    // all if this does not work...
-    switch(c)
-    {
-        case '1': return '!';
-        case '2': return '@';
-        case '3': return '#';
-        case '4': return '$';
-        case '5': return '%';
-        case '6': return '^';
-        case '7': return '&';
-        case '8': return '*';
-        case '9': return '(';
-        case '0': return ')';
-        case '-': return '_';
-        case '=': return '+';
-        case '`': return '~';
-        case '[': return '{';
-        case ']': return '}';
-        case ';': return ':';
-        case '\'': return '"';
-        case ',': return '<';
-        case '.': return '>';
-        case '/': return '?';
-        case '\\': return '|';
-        default:
-            return c;
-    }
-}
-void AbnormalChar(sf::Event &Event, char &c)
-{
-    // SFML doesn't map directly to ascii
-    // so I got this...
-
-    if(Event.Key.Code == sf::Key::Return)
-        c = '\n';
-    else if(Event.Key.Code == sf::Key::Space)
-        c = ' ';
-    else if(Event.Key.Code == sf::Key::BackSlash)
-        c = '\\';
-    else if(Event.Key.Code == sf::Key::LBracket)
-        c = '[';
-    else if(Event.Key.Code == sf::Key::RBracket)
-        c = ']';
-    else if(Event.Key.Code == sf::Key::SemiColon)
-        c = ';';
-    else if(Event.Key.Code == sf::Key::Comma)
-        c = ',';
-    else if(Event.Key.Code == sf::Key::Period)
-        c = '.';
-    else if(Event.Key.Code == sf::Key::Quote)
-        c = '"';
-    else if(Event.Key.Code == sf::Key::Slash)
-        c = '/';
-    else if(Event.Key.Code == sf::Key::Tilde)
-        c = '`';
-    else if(Event.Key.Code == sf::Key::Equal)
-        c = '=';
-    else if(Event.Key.Code == sf::Key::Dash)
-        c = '-';
-    else if(Event.Key.Code == sf::Key::Tab)
-        c = '\t';
-    else if(Event.Key.Code == sf::Key::Delete)
-        c = 127;
-    else if(Event.Key.Code == sf::Key::Back)
-        c = 8;
-    else if(Event.Key.Code == sf::Key::Escape)
-        c = 27;
 }
 
 void DrawCharacter(sf::Image &screen, unsigned short *font_buff, char c, sf::Color fg_col, sf::Color bg_col, bool blink, int x, int y)
@@ -169,22 +94,6 @@ void DrawCharacter(sf::Image &screen, unsigned short *font_buff, char c, sf::Col
             screen.SetPixel(x_img, y_img, bg_col);
         
     }
-}
-
-void reverse_bits(unsigned int &v)
-{
-    // code from : http://graphics.stanford.edu/~seander/bithacks.html#BitReverseObvious
-    unsigned int r = v; // r will be reversed bits of v; first get LSB of v
-    int s = sizeof(v) * CHAR_BIT - 1; // extra shift needed at end
-
-    for (v >>= 1; v; v >>= 1)
-    {   
-      r <<= 1;
-      r |= v & 1;
-      s--;
-    }
-    r <<= s; // shift when v's highest bits are zero
-    v = r;
 }
 
 int main(int argc, char *argv[])
@@ -283,15 +192,15 @@ int main(int argc, char *argv[])
                 running = false;
                 app.Close();
             }
-            if(Event.Type == sf::Event::KeyPressed)
+            if (Event.Type == sf::Event::TextEntered)
             {
-                char c = Event.Key.Code;
-                AbnormalChar(Event, c);     // fix incorrect ascii values sfml uses
-                if(Event.Key.Shift)
-                    cpu.PushInBuff(ShiftChar(c));
-                else
+                if (Event.Text.Unicode < 128)
+                {
+                    char c = static_cast<char>(Event.Text.Unicode);
                     cpu.PushInBuff(c);
+                }
             }
+
         }
         app.Clear();
 
